@@ -57,10 +57,32 @@ items:
   - id: STR-004
     section: "Merkle Module"
     summary: "SparseMerkleTree struct, proof generation, persistent nodes"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/crate_structure/specs/STR-004.md"
-    tests: []
-    notes: ""
+    tests:
+      - vv_req_str_004_smt_struct_exists
+      - vv_req_mrk_001_empty_tree_root
+      - vv_req_mrk_001_single_insert
+      - vv_req_mrk_001_batch_insert_multiple
+      - vv_req_mrk_001_batch_update
+      - vv_req_mrk_001_insert_then_remove_equals_empty
+      - vv_req_mrk_001_deferred_recomputation
+      - vv_req_mrk_001_idempotent_root
+      - vv_req_mrk_001_duplicate_insert_error
+      - vv_req_mrk_001_remove_missing_error
+      - vv_req_mrk_001_update_missing_error
+      - vv_req_mrk_001_256_level_depth
+      - vv_req_mrk_001_idempotent_update
+      - vv_req_mrk_002_empty_hash_leaf_level
+      - vv_req_mrk_002_empty_hash_consistency
+      - vv_req_mrk_002_empty_hash_root_level
+      - vv_req_mrk_002_empty_hash_o1_lookup
+      - vv_req_mrk_004_inclusion_proof
+      - vv_req_mrk_004_proof_empty_tree
+      - vv_req_mrk_004_proof_with_multiple_leaves
+      - vv_req_mrk_005_exclusion_proof
+      - vv_req_mrk_005_proof_invalid_root
+    notes: "22 tests: SparseMerkleTree (batch_insert/update/remove, deferred root, error cases, 256-level depth, idempotent update), MRK-002 empty hashes (leaf, root, all 256 levels consistent, O(1)), proofs (inclusion, exclusion, wrong root, empty tree, multi-leaf). Persistent layer is placeholder for MRK-003."
 
   - id: STR-005
     section: "Re-export Strategy"
