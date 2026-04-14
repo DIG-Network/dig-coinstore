@@ -1,0 +1,52 @@
+domain_id: hints
+normative: NORMATIVE.md
+verification: VERIFICATION.md
+
+items:
+  - id: HNT-001
+    section: "Hint Validation"
+    summary: "Empty hints silently skipped, hints > 32 bytes rejected with HintTooLong, only 32-byte hints eligible"
+    status: gap
+    spec_ref: "docs/requirements/domains/hints/specs/HNT-001.md"
+    tests: []
+    notes: ""
+
+  - id: HNT-002
+    section: "Idempotent Insertion"
+    summary: "Duplicate (coin_id, hint) pairs silently ignored via insert-or-ignore semantics"
+    status: gap
+    spec_ref: "docs/requirements/domains/hints/specs/HNT-002.md"
+    tests: []
+    notes: ""
+
+  - id: HNT-003
+    section: "Bidirectional Indices"
+    summary: "Forward (coin_id+hint) and reverse (hint+coin_id) KV composite-key indices"
+    status: gap
+    spec_ref: "docs/requirements/domains/hints/specs/HNT-003.md"
+    tests: []
+    notes: ""
+
+  - id: HNT-004
+    section: "Hint Queries"
+    summary: "get_coin_ids_by_hint, get_coin_ids_by_hints batch, get_hints_for_coin_ids, count_hints"
+    status: gap
+    spec_ref: "docs/requirements/domains/hints/specs/HNT-004.md"
+    tests: []
+    notes: ""
+
+  - id: HNT-005
+    section: "Rollback Cleanup"
+    summary: "All hints for deleted coins removed from both indices during rollback, no orphans"
+    status: gap
+    spec_ref: "docs/requirements/domains/hints/specs/HNT-005.md"
+    tests: []
+    notes: ""
+
+  - id: HNT-006
+    section: "Variable-Length Hint Keys"
+    summary: "Support 1-32 byte hints. Padded/length-prefixed keys for non-32-byte. Only 32-byte in include_hinted joins."
+    status: gap
+    spec_ref: "docs/requirements/domains/hints/specs/HNT-006.md"
+    tests: []
+    notes: ""

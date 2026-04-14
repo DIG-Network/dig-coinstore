@@ -1,0 +1,52 @@
+domain_id: crate_structure
+normative: NORMATIVE.md
+verification: VERIFICATION.md
+
+items:
+  - id: STR-001
+    section: "Cargo.toml"
+    summary: "Cargo.toml with dependencies, feature gates, metadata"
+    status: gap
+    spec_ref: "docs/requirements/domains/crate_structure/specs/STR-001.md"
+    tests: []
+    notes: ""
+
+  - id: STR-002
+    section: "Module Hierarchy"
+    summary: "src/lib.rs root, submodule layout, file naming"
+    status: gap
+    spec_ref: "docs/requirements/domains/crate_structure/specs/STR-002.md"
+    tests: []
+    notes: ""
+
+  - id: STR-003
+    section: "Storage Module"
+    summary: "StorageBackend trait, RocksDB and LMDB implementations"
+    status: gap
+    spec_ref: "docs/requirements/domains/crate_structure/specs/STR-003.md"
+    tests: []
+    notes: ""
+
+  - id: STR-004
+    section: "Merkle Module"
+    summary: "SparseMerkleTree struct, proof generation, persistent nodes"
+    status: gap
+    spec_ref: "docs/requirements/domains/crate_structure/specs/STR-004.md"
+    tests: []
+    notes: ""
+
+  - id: STR-005
+    section: "Re-export Strategy"
+    summary: "Chia types re-exported via dig-clvm, no redefinition"
+    status: gap
+    spec_ref: "docs/requirements/domains/crate_structure/specs/STR-005.md"
+    tests: []
+    notes: ""
+
+  - id: STR-006
+    section: "Test Infrastructure"
+    summary: "Test file per domain, shared helpers, coin builders"
+    status: gap
+    spec_ref: "docs/requirements/domains/crate_structure/specs/STR-006.md"
+    tests: []
+    notes: ""

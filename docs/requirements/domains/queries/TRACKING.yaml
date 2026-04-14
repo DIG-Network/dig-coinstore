@@ -1,0 +1,92 @@
+domain_id: queries
+normative: NORMATIVE.md
+verification: VERIFICATION.md
+
+items:
+  - id: QRY-001
+    section: "Point Lookups"
+    summary: "get_coin_record() and get_coin_records() point lookups by coin ID"
+    status: gap
+    spec_ref: "docs/requirements/domains/queries/specs/QRY-001.md"
+    tests: []
+    notes: ""
+
+  - id: QRY-002
+    section: "Puzzle Hash Queries"
+    summary: "get_coin_records_by_puzzle_hash(es) with include_spent, start_height, end_height"
+    status: gap
+    spec_ref: "docs/requirements/domains/queries/specs/QRY-002.md"
+    tests: []
+    notes: ""
+
+  - id: QRY-003
+    section: "Height Queries"
+    summary: "get_coins_added_at_height() and get_coins_removed_at_height(), height 0 removed returns empty"
+    status: gap
+    spec_ref: "docs/requirements/domains/queries/specs/QRY-003.md"
+    tests: []
+    notes: ""
+
+  - id: QRY-004
+    section: "Parent ID Queries"
+    summary: "get_coin_records_by_parent_ids() with include_spent, height range"
+    status: gap
+    spec_ref: "docs/requirements/domains/queries/specs/QRY-004.md"
+    tests: []
+    notes: ""
+
+  - id: QRY-005
+    section: "Name Queries"
+    summary: "get_coin_records_by_names() by coin IDs with include_spent, height range"
+    status: gap
+    spec_ref: "docs/requirements/domains/queries/specs/QRY-005.md"
+    tests: []
+    notes: ""
+
+  - id: QRY-006
+    section: "Coin State Queries"
+    summary: "get_coin_states_by_ids() and get_coin_states_by_puzzle_hashes() lightweight CoinState for sync"
+    status: gap
+    spec_ref: "docs/requirements/domains/queries/specs/QRY-006.md"
+    tests: []
+    notes: ""
+
+  - id: QRY-007
+    section: "Batch Coin State Pagination"
+    summary: "batch_coin_states_by_puzzle_hashes() with batch limit, hinted join, dedup, min_amount, deterministic sort, block boundary preservation, pagination"
+    status: gap
+    spec_ref: "docs/requirements/domains/queries/specs/QRY-007.md"
+    tests: []
+    notes: ""
+
+  - id: QRY-008
+    section: "Singleton Lineage"
+    summary: "get_unspent_lineage_info_for_puzzle_hash() singleton FF lineage, None if != 1 match"
+    status: gap
+    spec_ref: "docs/requirements/domains/queries/specs/QRY-008.md"
+    tests: []
+    notes: ""
+
+  - id: QRY-009
+    section: "Aggregate Queries"
+    summary: "num_unspent(), total_unspent_value(), aggregate_unspent_by_puzzle_hash(), num_total()"
+    status: gap
+    spec_ref: "docs/requirements/domains/queries/specs/QRY-009.md"
+    tests: []
+    notes: ""
+
+  - id: QRY-010
+    section: "Chain State"
+    summary: "height(), tip_hash(), state_root(), timestamp(), stats(), is_empty()"
+    status: gap
+    spec_ref: "docs/requirements/domains/queries/specs/QRY-010.md"
+    tests: []
+    notes: ""
+
+  - id: QRY-011
+    section: "Input Slice Chunking"
+    summary: "All &[T] input query methods MUST chunk in batches of DEFAULT_LOOKUP_BATCH_SIZE (1000)"
+    status: gap
+    spec_ref: "docs/requirements/domains/queries/specs/QRY-011.md"
+    tests: []
+    notes: "Adopted from Chia's to_batches() pattern"

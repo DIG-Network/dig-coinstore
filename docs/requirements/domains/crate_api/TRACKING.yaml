@@ -1,0 +1,84 @@
+domain_id: crate_api
+normative: NORMATIVE.md
+verification: VERIFICATION.md
+
+items:
+  - id: API-001
+    section: "Construction"
+    summary: "CoinStore::new(), CoinStore::with_config(), init_genesis() constructors"
+    status: draft
+    spec_ref: "docs/requirements/domains/crate_api/specs/API-001.md"
+    tests: []
+    notes: "new(path) with defaults, with_config(config) custom, init_genesis() for bootstrap. Returns Result<Self, CoinStoreError>."
+
+  - id: API-002
+    section: "Core Types"
+    summary: "CoinRecord struct with all fields and derived methods"
+    status: draft
+    spec_ref: "docs/requirements/domains/crate_api/specs/API-002.md"
+    tests: []
+    notes: "6 fields, Debug+Clone+Serialize+Deserialize, 5 methods: new(), is_spent(), spend(), coin_id(), to_coin_state()"
+
+  - id: API-003
+    section: "Core Types"
+    summary: "CoinStoreConfig with builder pattern and defaults"
+    status: draft
+    spec_ref: "docs/requirements/domains/crate_api/specs/API-003.md"
+    tests: []
+    notes: "8 fields, Default impl, builder with_* methods, StorageBackend enum (Lmdb, RocksDb)"
+
+  - id: API-004
+    section: "Error Types"
+    summary: "CoinStoreError enum with 15 variants and thiserror derives"
+    status: draft
+    spec_ref: "docs/requirements/domains/crate_api/specs/API-004.md"
+    tests: []
+    notes: "15 variants covering chain continuity, coin existence, spend validity, storage, genesis, and query errors. Debug+Clone+PartialEq+thiserror::Error."
+
+  - id: API-005
+    section: "Block Input Types"
+    summary: "BlockData and CoinAddition structs"
+    status: draft
+    spec_ref: "docs/requirements/domains/crate_api/specs/API-005.md"
+    tests: []
+    notes: "BlockData: 9 fields for pre-validated block state changes. CoinAddition: coin_id, coin, same_as_parent."
+
+  - id: API-006
+    section: "Result Types"
+    summary: "ApplyBlockResult and RollbackResult structs"
+    status: draft
+    spec_ref: "docs/requirements/domains/crate_api/specs/API-006.md"
+    tests: []
+    notes: "ApplyBlockResult: state_root, coins_created, coins_spent, height. RollbackResult: modified_coins HashMap, coins_deleted, coins_unspent, new_height."
+
+  - id: API-007
+    section: "Statistics"
+    summary: "CoinStoreStats struct with 9 fields"
+    status: draft
+    spec_ref: "docs/requirements/domains/crate_api/specs/API-007.md"
+    tests: []
+    notes: "Returned by CoinStore::stats(). Covers height, timestamp, counts, totals, state_root, tip_hash, hint_count, snapshot_count."
+
+  - id: API-008
+    section: "Snapshot Types"
+    summary: "CoinStoreSnapshot struct with Serialize/Deserialize"
+    status: draft
+    spec_ref: "docs/requirements/domains/crate_api/specs/API-008.md"
+    tests: []
+    notes: "8 fields. Serialize+Deserialize for snapshot/restore and fast sync. Contains full coin records HashMap and hints Vec."
+
+  - id: API-009
+    section: "Type Aliases and Lineage Info"
+    summary: "Public type aliases CoinId = Bytes32 and PuzzleHash = Bytes32. UnspentLineageInfo struct (coin_id, parent_id, parent_parent_id)."
+    status: gap
+    spec_ref: "docs/requirements/domains/crate_api/specs/API-009.md"
+    tests: []
+    notes: ""
+
+  - id: API-010
+    section: "RollbackAboveTip and is_unspent"
+    summary: "CoinStoreError::RollbackAboveTip { target: i64, current: u64 } variant. CoinStore::is_unspent(&self, coin_id: &CoinId) -> bool with O(1) lock-free semantics."
+    status: gap
+    spec_ref: "docs/requirements/domains/crate_api/specs/API-010.md"
+    tests: []
+    notes: ""

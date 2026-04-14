@@ -1,0 +1,60 @@
+domain_id: rollback
+normative: NORMATIVE.md
+verification: VERIFICATION.md
+
+items:
+  - id: RBK-001
+    section: "Core Rollback"
+    summary: "rollback_to_block(target_height) returns RollbackResult, negative target rolls back everything"
+    status: gap
+    spec_ref: "docs/requirements/domains/rollback/specs/RBK-001.md"
+    tests: []
+    notes: ""
+
+  - id: RBK-002
+    section: "Core Rollback"
+    summary: "Coins confirmed after target_height deleted, pre-deletion records saved to modified_coins"
+    status: gap
+    spec_ref: "docs/requirements/domains/rollback/specs/RBK-002.md"
+    tests: []
+    notes: ""
+
+  - id: RBK-003
+    section: "Core Rollback"
+    summary: "Coins spent after target_height marked unspent, added to modified_coins if not already captured"
+    status: gap
+    spec_ref: "docs/requirements/domains/rollback/specs/RBK-003.md"
+    tests: []
+    notes: ""
+
+  - id: RBK-004
+    section: "Fast-Forward Eligibility"
+    summary: "FF-eligible recomputation on un-spend based on parent coin attributes"
+    status: gap
+    spec_ref: "docs/requirements/domains/rollback/specs/RBK-004.md"
+    tests: []
+    notes: ""
+
+  - id: RBK-005
+    section: "Convenience Wrapper"
+    summary: "rollback_n_blocks(n) convenience wrapper calling rollback_to_block(self.height() - n)"
+    status: gap
+    spec_ref: "docs/requirements/domains/rollback/specs/RBK-005.md"
+    tests: []
+    notes: ""
+
+  - id: RBK-006
+    section: "Merkle Tree Rebuild"
+    summary: "Batch-update Merkle tree during rollback: remove deleted, re-hash un-spent. Single root recomputation."
+    status: gap
+    spec_ref: "docs/requirements/domains/rollback/specs/RBK-006.md"
+    tests: []
+    notes: ""
+
+  - id: RBK-007
+    section: "Atomicity"
+    summary: "Rollback MUST be atomic. Any failure aborts entire rollback with no partial state changes."
+    status: gap
+    spec_ref: "docs/requirements/domains/rollback/specs/RBK-007.md"
+    tests: []
+    notes: ""

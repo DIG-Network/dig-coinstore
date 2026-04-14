@@ -1,0 +1,106 @@
+schema_version: 1
+
+status_values:
+  active: "Requirements in use for dig-coinstore implementation"
+  planned: "Scoped; not yet verified"
+
+domains:
+  - id: crate_structure
+    title: "Crate Structure"
+    summary: "Crate folder layout, module hierarchy, file naming conventions, Cargo.toml configuration, feature gates, and re-export strategy."
+    status: planned
+    paths:
+      normative: domains/crate_structure/NORMATIVE.md
+      verification: domains/crate_structure/VERIFICATION.md
+      tracking: domains/crate_structure/TRACKING.yaml
+      requirement_specs: domains/crate_structure
+
+  - id: crate_api
+    title: "Crate API"
+    summary: "Public API surface: CoinStore constructor, CoinStoreConfig, CoinStoreError, CoinRecord, BlockData, CoinStoreSnapshot, CoinStoreStats, query return types, re-exports."
+    status: planned
+    paths:
+      normative: domains/crate_api/NORMATIVE.md
+      verification: domains/crate_api/VERIFICATION.md
+      tracking: domains/crate_api/TRACKING.yaml
+      requirement_specs: domains/crate_api
+
+  - id: block_application
+    title: "Block Application"
+    summary: "Block application pipeline: height/parent validation, reward coin assertion, removal validation, FF-eligible tracking, strict spend assertion, hint storage, Merkle batch update, state root verification, performance logging."
+    status: planned
+    paths:
+      normative: domains/block_application/NORMATIVE.md
+      verification: domains/block_application/VERIFICATION.md
+      tracking: domains/block_application/TRACKING.yaml
+      requirement_specs: domains/block_application
+
+  - id: rollback
+    title: "Rollback"
+    summary: "Rollback pipeline: coin deletion, un-spending, FF-eligible recomputation, hint cleanup, Merkle rebuild, modified coins return, rollback_n_blocks convenience."
+    status: planned
+    paths:
+      normative: domains/rollback/NORMATIVE.md
+      verification: domains/rollback/VERIFICATION.md
+      tracking: domains/rollback/TRACKING.yaml
+      requirement_specs: domains/rollback
+
+  - id: queries
+    title: "Queries"
+    summary: "Coin state queries: by ID, puzzle hash, parent, height, coin state, batch pagination with block boundary preservation, dedup across hinted results, min_amount filter, singleton lineage, aggregate queries."
+    status: planned
+    paths:
+      normative: domains/queries/NORMATIVE.md
+      verification: domains/queries/VERIFICATION.md
+      tracking: domains/queries/TRACKING.yaml
+      requirement_specs: domains/queries
+
+  - id: storage
+    title: "Storage"
+    summary: "Persistence backends (LMDB, RocksDB), column family layout, bloom filters, prefix bloom, compaction strategy, WriteBatch atomic commits, feature gates."
+    status: planned
+    paths:
+      normative: domains/storage/NORMATIVE.md
+      verification: domains/storage/VERIFICATION.md
+      tracking: domains/storage/TRACKING.yaml
+      requirement_specs: domains/storage
+
+  - id: merkle
+    title: "Merkle Tree"
+    summary: "Sparse Merkle tree: state root computation, batch updates, persistent internal nodes, memoized empty hashes, proof generation, proof verification."
+    status: planned
+    paths:
+      normative: domains/merkle/NORMATIVE.md
+      verification: domains/merkle/VERIFICATION.md
+      tracking: domains/merkle/TRACKING.yaml
+      requirement_specs: domains/merkle
+
+  - id: hints
+    title: "Hints"
+    summary: "Hint store: hint validation (length, empty skip), idempotent insertion, forward/reverse index, hint queries, integration with batch_coin_states, rollback cleanup."
+    status: planned
+    paths:
+      normative: domains/hints/NORMATIVE.md
+      verification: domains/hints/VERIFICATION.md
+      tracking: domains/hints/TRACKING.yaml
+      requirement_specs: domains/hints
+
+  - id: performance
+    title: "Performance"
+    summary: "In-memory unspent set, LRU coin record cache, materialized aggregate counters, tiered spent coin archival, snapshot-based fast sync, height-partitioned indices."
+    status: planned
+    paths:
+      normative: domains/performance/NORMATIVE.md
+      verification: domains/performance/VERIFICATION.md
+      tracking: domains/performance/TRACKING.yaml
+      requirement_specs: domains/performance
+
+  - id: concurrency
+    title: "Concurrency"
+    summary: "Thread safety (Send + Sync), RwLock strategy, MVCC reads during writes, lock-free unspent checks, parallel removal validation."
+    status: planned
+    paths:
+      normative: domains/concurrency/NORMATIVE.md
+      verification: domains/concurrency/VERIFICATION.md
+      tracking: domains/concurrency/TRACKING.yaml
+      requirement_specs: domains/concurrency

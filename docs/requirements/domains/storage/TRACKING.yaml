@@ -1,0 +1,68 @@
+domain_id: storage
+normative: NORMATIVE.md
+verification: VERIFICATION.md
+
+items:
+  - id: STO-001
+    section: "Trait Abstraction"
+    summary: "StorageBackend trait with get, put, delete, batch_write, prefix_scan, flush, compact"
+    status: gap
+    spec_ref: "docs/requirements/domains/storage/specs/STO-001.md"
+    tests: []
+    notes: ""
+
+  - id: STO-002
+    section: "Backend Implementations"
+    summary: "RocksDB backend with 12 column families"
+    status: gap
+    spec_ref: "docs/requirements/domains/storage/specs/STO-002.md"
+    tests: []
+    notes: ""
+
+  - id: STO-003
+    section: "Backend Implementations"
+    summary: "LMDB backend with 6 named databases"
+    status: gap
+    spec_ref: "docs/requirements/domains/storage/specs/STO-003.md"
+    tests: []
+    notes: ""
+
+  - id: STO-004
+    section: "Bloom Filter Configuration"
+    summary: "Full bloom for point lookups, prefix bloom for puzzle hash CFs, no bloom for sequential CFs"
+    status: gap
+    spec_ref: "docs/requirements/domains/storage/specs/STO-004.md"
+    tests: []
+    notes: ""
+
+  - id: STO-005
+    section: "Atomic Writes"
+    summary: "WriteBatch atomic commit with single WAL fsync per block"
+    status: gap
+    spec_ref: "docs/requirements/domains/storage/specs/STO-005.md"
+    tests: []
+    notes: ""
+
+  - id: STO-006
+    section: "Compaction Strategy"
+    summary: "Level compaction for read CFs, FIFO for append CFs"
+    status: gap
+    spec_ref: "docs/requirements/domains/storage/specs/STO-006.md"
+    tests: []
+    notes: ""
+
+  - id: STO-007
+    section: "Feature Gates"
+    summary: "Feature flags: lmdb-storage, rocksdb-storage, full-storage. Default: rocksdb-storage"
+    status: gap
+    spec_ref: "docs/requirements/domains/storage/specs/STO-007.md"
+    tests: []
+    notes: ""
+
+  - id: STO-008
+    section: "Serialization"
+    summary: "Bincode serialization for CoinRecord and snapshots, key encoding in schema.rs"
+    status: gap
+    spec_ref: "docs/requirements/domains/storage/specs/STO-008.md"
+    tests: []
+    notes: ""
