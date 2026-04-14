@@ -5,11 +5,24 @@ verification: VERIFICATION.md
 items:
   - id: STR-001
     section: "Cargo.toml"
-    summary: "Cargo.toml with dependencies, feature gates, metadata"
-    status: gap
+    summary: "Cargo.toml with chia-protocol, chia-sha2, chia-traits deps; chia-consensus + chia-sdk-test dev-deps; feature gates"
+    status: verified
     spec_ref: "docs/requirements/domains/crate_structure/specs/STR-001.md"
-    tests: []
-    notes: ""
+    tests:
+      - vv_req_str_001_default_feature_is_rocksdb
+      - vv_req_str_001_chia_sha2_available
+      - vv_req_str_001_chia_protocol_types_available
+      - vv_req_str_001_chia_traits_available
+      - vv_req_str_001_dig_clvm_available
+      - vv_req_str_001_dig_constants_available
+      - vv_req_str_001_serde_derive_works
+      - vv_req_str_001_parking_lot_available
+      - vv_req_str_001_thiserror_available
+      - vv_req_str_001_tracing_available
+      - vv_req_str_001_bincode_available
+      - vv_req_str_001_lru_available
+      - vv_req_str_001_rayon_available
+    notes: "13 tests verify all 12 deps + feature gates. chia-sha2 v0.26 (matches dig-clvm). All 4 feature combos compile (default, lmdb-only, full, no-default). Clippy clean, fmt clean."
 
   - id: STR-002
     section: "Module Hierarchy"
@@ -37,11 +50,11 @@ items:
 
   - id: STR-005
     section: "Re-export Strategy"
-    summary: "Chia types re-exported via dig-clvm, no redefinition"
+    summary: "Coin, Bytes32, CoinState, CoinStateFilters re-exported via dig-clvm; ChiaCoinRecord alias for interop"
     status: gap
     spec_ref: "docs/requirements/domains/crate_structure/specs/STR-005.md"
     tests: []
-    notes: ""
+    notes: "Added CoinStateFilters re-export and ChiaCoinRecord alias"
 
   - id: STR-006
     section: "Test Infrastructure"

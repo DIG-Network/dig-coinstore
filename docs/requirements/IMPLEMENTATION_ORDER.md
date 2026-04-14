@@ -9,17 +9,17 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 
 ## Phase 0: Crate Structure & Foundation
 
-- [ ] STR-001 — Cargo.toml with dependencies, feature gates, and metadata
+- [x] STR-001 — Cargo.toml with dependencies (chia-protocol, chia-sha2, chia-traits + chia-consensus/chia-sdk-test dev-deps), feature gates, and metadata
 - [ ] STR-002 — Module hierarchy (`src/lib.rs` root, submodule layout)
 - [ ] STR-003 — Storage module (`src/storage/`) with backend trait and implementations
 - [ ] STR-004 — Merkle module (`src/merkle/`) with sparse Merkle tree
-- [ ] STR-005 — Re-export strategy (Chia types via `dig-clvm`)
+- [ ] STR-005 — Re-export strategy (Coin, Bytes32, CoinState, CoinStateFilters via `dig-clvm`; ChiaCoinRecord alias)
 - [ ] STR-006 — Test infrastructure (`tests/` layout, helpers, fixtures)
 
 ## Phase 1: Crate API Types
 
 - [ ] API-001 — CoinStore constructor (`new`, `with_config`)
-- [ ] API-002 — CoinRecord struct (coin, confirmed_height, spent_height, coinbase, timestamp, ff_eligible)
+- [ ] API-002 — CoinRecord struct (coin, confirmed_height, spent_height, coinbase, timestamp, ff_eligible) + from/to_chia_coin_record() interop
 - [ ] API-003 — CoinStoreConfig with builder pattern and defaults
 - [ ] API-004 — CoinStoreError enum (14 variants)
 - [ ] API-005 — BlockData and CoinAddition structs
@@ -47,7 +47,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 - [ ] MRK-003 — Persistent internal nodes (merkle_nodes column family)
 - [ ] MRK-004 — Proof generation (`get_coin_proof`)
 - [ ] MRK-005 — Proof verification (`verify_coin_proof`)
-- [ ] MRK-006 — Leaf hash function (`coin_record_hash` determinism)
+- [ ] MRK-006 — Leaf hash function (`coin_record_hash` using `chia_sha2::Sha256`, determinism)
 
 ## Phase 4: Block Application Pipeline
 
@@ -83,7 +83,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 - [ ] QRY-004 — `get_coin_records_by_parent_ids()`
 - [ ] QRY-005 — `get_coin_records_by_names()` (with include_spent, height range)
 - [ ] QRY-006 — `get_coin_states_by_ids()` and `get_coin_states_by_puzzle_hashes()`
-- [ ] QRY-007 — `batch_coin_states_by_puzzle_hashes()` (pagination, block boundary, dedup, min_amount)
+- [ ] QRY-007 — `batch_coin_states_by_puzzle_hashes()` with `CoinStateFilters` from chia-protocol (pagination, block boundary, dedup, min_amount)
 - [ ] QRY-008 — `get_unspent_lineage_info_for_puzzle_hash()` (singleton FF support)
 - [ ] QRY-009 — Aggregate queries (`num_unspent`, `total_unspent_value`, `aggregate_unspent_by_puzzle_hash`)
 - [ ] QRY-010 — Chain state queries (`height`, `tip_hash`, `state_root`, `stats`, `is_empty`)
