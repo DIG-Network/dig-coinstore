@@ -102,7 +102,15 @@ items:
   - id: STR-006
     section: "Test Infrastructure"
     summary: "Test file per domain, shared helpers, coin builders"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/crate_structure/specs/STR-006.md"
-    tests: []
-    notes: ""
+    tests:
+      - vv_req_str_006_helpers_compile
+      - vv_req_str_006_coin_builder
+      - vv_req_str_006_batch_coin_builder
+      - vv_req_str_006_hash_determinism
+      - vv_req_str_006_temp_dir_lifecycle
+      - vv_req_str_006_block_builder
+      - vv_req_str_006_coinstate_builders
+      - vv_req_str_006_all_test_files_importable
+    notes: "8 tests. Helpers provide: test_hash/test_hash_str/filled_hash, test_coin/test_coins_same_puzzle/coin_id, unspent_coin_state/spent_coin_state, temp_dir, TestBlockParams::at_height with builder pattern. All 10 test files import helpers via mod helpers;. Clippy clean."
