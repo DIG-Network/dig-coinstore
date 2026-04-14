@@ -1,0 +1,97 @@
+[package]
+name = "dig-coinstore"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75.0"
+description = "DIG L2 global coin state database — persistent UTXO store with Merkle proofs, hint indexing, and rollback support"
+license = "MIT"
+authors = ["DIG Network"]
+repository = "https://github.com/DIG-Network/dig-coinstore"
+
+# The library name uses underscores per Rust convention while the package
+# name uses hyphens per Cargo convention.
+# Requirement: STR-001 (docs/requirements/domains/crate_structure/specs/STR-001.md)
+[lib]
+name = "dig_coinstore"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dependencies
+# ─────────────────────────────────────────────────────────────────────────────
+# All Chia ecosystem crates are accessed through dig-clvm re-exports to maintain
+# a single integration point (STR-005). Direct deps on chia-protocol, chia-sha2,
+# and chia-traits are declared here for types and hashing that dig-coinstore
+# uses at its public API boundary.
+#
+# Storage backends (rocksdb, heed) are feature-gated (STR-001, STO-007) so
+# consumers only compile the native libraries they actually need.
+
+[dependencies]
+# -- Chia ecosystem (protocol types, hashing, serialization traits) --
+chia-protocol = "0.26"
+chia-sha2 = "0.26"
+chia-traits = "0.26"
+
+# -- DIG workspace crates --
+dig-clvm = { path = "../dig-clvm" }
+dig-constants = { path = "../dig-constants" }
+
+# -- Storage backends (feature-gated, see [features] below) --
+rocksdb = { version = "0.22", optional = true }
+heed = { version = "0.20", optional = true }
+
+# -- Serialization --
+# bincode: compact binary encoding for internal KV storage values (STO-008).
+# serde: derive macros for Serialize/Deserialize on our types.
+bincode = "1.3"
+serde = { version = "1", features = ["derive"] }
+
+# -- Concurrency --
+# parking_lot: faster RwLock/Mutex than std (CON-002).
+parking_lot = "0.12"
+
+# -- Error handling --
+thiserror = "2"
+
+# -- Observability --
+# tracing: structured logging for performance warnings (BLK-010).
+tracing = "0.1"
+
+# -- Caching --
+# lru: LRU eviction cache for CoinRecord point lookups (PRF-002).
+lru = "0.12"
+
+# -- Parallelism --
+# rayon: data-parallel removal validation (CON-004).
+rayon = "1.10"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dev dependencies (test-only)
+# ─────────────────────────────────────────────────────────────────────────────
+# chia-consensus: MerkleSet / compute_merkle_set_root() for cross-checking
+#   our sparse Merkle tree against the reference implementation in tests.
+# chia-sdk-test: Simulator providing an in-memory coin store used as a test
+#   oracle for query parity integration tests.
+# tempfile: temporary directories for storage backend tests.
+
+[dev-dependencies]
+chia-consensus = "0.26"
+# chia-sdk-test = "0.33"  # TODO: uncomment once chia-sdk-test 0.33 is published
+tempfile = "3"
+rand = "0.8"
+hex-literal = "0.4"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Feature gates
+# ─────────────────────────────────────────────────────────────────────────────
+# Storage backends are feature-gated so downstream consumers only pull in the
+# native C/C++ libraries they need. The default is rocksdb-storage.
+#
+# Requirement: STR-001, STO-007
+# Spec: docs/requirements/domains/crate_structure/specs/STR-001.md
+# Spec: docs/requirements/domains/storage/specs/STO-007.md
+
+[features]
+default = ["rocksdb-storage"]
+rocksdb-storage = ["dep:rocksdb"]
+lmdb-storage = ["dep:heed"]
+full-storage = ["rocksdb-storage", "lmdb-storage"]
