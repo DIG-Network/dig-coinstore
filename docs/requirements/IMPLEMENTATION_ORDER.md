@@ -10,7 +10,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 ## Phase 0: Crate Structure & Foundation
 
 - [x] STR-001 — Cargo.toml with dependencies (chia-protocol, chia-sha2, chia-traits + chia-consensus/chia-sdk-test dev-deps), feature gates, and metadata
-- [ ] STR-002 — Module hierarchy (`src/lib.rs` root, submodule layout)
+- [x] STR-002 — Module hierarchy (`src/lib.rs` root, submodule layout)
 - [ ] STR-003 — Storage module (`src/storage/`) with backend trait and implementations
 - [ ] STR-004 — Merkle module (`src/merkle/`) with sparse Merkle tree
 - [ ] STR-005 — Re-export strategy (Coin, Bytes32, CoinState, CoinStateFilters via `dig-clvm`; ChiaCoinRecord alias)

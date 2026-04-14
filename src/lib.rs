@@ -20,6 +20,23 @@
 //! - `lmdb-storage` — LMDB with memory-mapped I/O
 //! - `full-storage` — Both backends enabled
 //!
+//! ## Module organization
+//!
+//! | Module | Responsibility | Requirement domain |
+//! |--------|---------------|--------------------|
+//! | [`coin_store`] | Primary public API struct | API-001 |
+//! | [`config`] | Configuration types and constants | API-003 |
+//! | [`error`] | Error enum | API-004 |
+//! | [`types`] | Domain types (CoinRecord, BlockData, etc.) | API-002, API-005..009 |
+//! | [`block_apply`] | Block application pipeline | BLK-001..014 |
+//! | [`rollback`] | Rollback / reorg recovery | RBK-001..007 |
+//! | [`queries`] | Coin state queries | QRY-001..011 |
+//! | [`hints`] | Hint store | HNT-001..006 |
+//! | [`storage`] | Backend trait + implementations | STO-001..008 |
+//! | [`merkle`] | Sparse Merkle tree + proofs | MRK-001..006 |
+//! | [`cache`] | In-memory caching (unspent set, LRU, counters) | PRF-001..003 |
+//! | [`archive`] | Tiered spent coin archival | PRF-005 |
+//!
 //! ## Spec reference
 //!
 //! Master specification: `docs/resources/SPEC.md`
@@ -29,9 +46,61 @@
 //! - Chia CoinStore: `chia/full_node/coin_store.py`
 //! - Chia HintStore: `chia/full_node/hint_store.py`
 
-// Placeholder module declarations — these will be populated as requirements
-// are implemented in later phases. Each module maps to a domain in the
-// requirements structure (docs/requirements/domains/).
-//
-// Phase 0 (STR-001) establishes Cargo.toml; subsequent STR requirements
-// will flesh out these modules.
+// ─────────────────────────────────────────────────────────────────────────────
+// Top-level modules
+// ─────────────────────────────────────────────────────────────────────────────
+// Each module corresponds to one or more requirement domains in
+// docs/requirements/domains/. The module hierarchy is defined by STR-002.
+
+/// CoinStore struct — primary public API orchestration.
+/// See: docs/requirements/domains/crate_api/specs/API-001.md
+pub mod coin_store;
+
+/// Configuration types and constants.
+/// See: docs/requirements/domains/crate_api/specs/API-003.md
+pub mod config;
+
+/// Error types for all coinstore operations.
+/// See: docs/requirements/domains/crate_api/specs/API-004.md
+pub mod error;
+
+/// Domain types: CoinRecord, BlockData, CoinAddition, result structs, type aliases.
+/// See: docs/requirements/domains/crate_api/specs/API-002.md
+pub mod types;
+
+/// Block application pipeline (Phase 1 validation + Phase 2 mutation).
+/// See: docs/requirements/domains/block_application/specs/
+pub mod block_apply;
+
+/// Rollback pipeline for chain reorganization recovery.
+/// See: docs/requirements/domains/rollback/specs/
+pub mod rollback;
+
+/// All query method implementations on CoinStore.
+/// See: docs/requirements/domains/queries/specs/
+pub mod queries;
+
+/// Hint store for puzzle hash hints on coins.
+/// See: docs/requirements/domains/hints/specs/
+pub mod hints;
+
+/// Tiered spent coin archival (hot/archive/prune).
+/// See: docs/requirements/domains/performance/specs/PRF-005.md
+pub mod archive;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Subdirectory modules
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Storage backend abstraction (trait + RocksDB/LMDB implementations).
+/// Backend modules are feature-gated: `rocksdb-storage`, `lmdb-storage`.
+/// See: docs/requirements/domains/storage/specs/
+pub mod storage;
+
+/// Sparse Merkle tree for state root computation and proofs.
+/// See: docs/requirements/domains/merkle/specs/
+pub mod merkle;
+
+/// In-memory caching: unspent set, LRU cache, materialized counters.
+/// See: docs/requirements/domains/performance/specs/PRF-001..003.md
+pub mod cache;
