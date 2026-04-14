@@ -27,10 +27,15 @@ items:
   - id: STR-002
     section: "Module Hierarchy"
     summary: "src/lib.rs root, submodule layout, file naming"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/crate_structure/specs/STR-002.md"
-    tests: []
-    notes: ""
+    tests:
+      - vv_req_str_002_crate_compiles_with_all_modules
+      - vv_req_str_002_all_top_level_modules_accessible
+      - vv_req_str_002_storage_submodules
+      - vv_req_str_002_merkle_submodules
+      - vv_req_str_002_cache_submodules
+    notes: "All 21 source files created. 12 top-level modules + 3 subdirectory modules (storage, merkle, cache). 10 placeholder test files + helpers/mod.rs + benches/coinstate_bench.rs. All compile clean."
 
   - id: STR-003
     section: "Storage Module"
