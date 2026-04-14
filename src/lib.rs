@@ -47,6 +47,37 @@
 //! - Chia HintStore: `chia/full_node/hint_store.py`
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Re-exports: Chia ecosystem types (STR-005)
+// ─────────────────────────────────────────────────────────────────────────────
+// These re-exports ensure consumers of dig-coinstore can access core Chia types
+// without adding direct dependencies on chia-protocol or dig-clvm.
+//
+// The dependency chain is:
+//   chia-protocol  →  dig-clvm  →  dig-coinstore  →  consumers
+//       (defines)    (re-exports)   (re-exports)
+//
+// Requirement: STR-005
+// Spec: docs/requirements/domains/crate_structure/specs/STR-005.md
+
+/// The fundamental coin type in the Chia coinset model.
+/// `CoinId = sha256(parent_coin_info || puzzle_hash || amount)`.
+/// Re-exported from `dig-clvm` (which re-exports from `chia-protocol`).
+pub use dig_clvm::Coin;
+
+/// A 32-byte hash used for coin IDs, puzzle hashes, block hashes, state roots.
+/// Re-exported from `dig-clvm` (which re-exports from `chia-protocol`).
+pub use dig_clvm::Bytes32;
+
+/// Lightweight coin state for the sync protocol: coin + created_height + spent_height.
+/// Re-exported from `dig-clvm` (which re-exports from `chia-protocol`).
+pub use dig_clvm::CoinState;
+
+/// Filters for batch coin state queries (include_spent, include_unspent, include_hinted, min_amount).
+/// Used by `batch_coin_states_by_puzzle_hashes()` (QRY-007).
+/// Not re-exported by dig-clvm, so imported directly from chia-protocol.
+pub use chia_protocol::CoinStateFilters;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Top-level modules
 // ─────────────────────────────────────────────────────────────────────────────
 // Each module corresponds to one or more requirement domains in

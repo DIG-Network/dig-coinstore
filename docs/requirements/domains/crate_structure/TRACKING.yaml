@@ -87,10 +87,17 @@ items:
   - id: STR-005
     section: "Re-export Strategy"
     summary: "Coin, Bytes32, CoinState, CoinStateFilters re-exported via dig-clvm; ChiaCoinRecord alias for interop"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/crate_structure/specs/STR-005.md"
-    tests: []
-    notes: "Added CoinStateFilters re-export and ChiaCoinRecord alias"
+    tests:
+      - vv_req_str_005_coin_reexport
+      - vv_req_str_005_bytes32_reexport
+      - vv_req_str_005_coinstate_reexport
+      - vv_req_str_005_coinstatefilters_reexport
+      - vv_req_str_005_type_identity_coin
+      - vv_req_str_005_type_identity_bytes32
+      - vv_req_str_005_type_identity_coinstatefilters
+    notes: "7 tests: 4 re-exports accessible from crate root (Coin, Bytes32, CoinState, CoinStateFilters), 3 type identity proofs (dig_coinstore::X == dig_clvm::X via assignment). CoinStateFilters from chia-protocol directly (not in dig-clvm). Clippy clean."
 
   - id: STR-006
     section: "Test Infrastructure"
