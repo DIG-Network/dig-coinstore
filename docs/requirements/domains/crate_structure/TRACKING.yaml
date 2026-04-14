@@ -40,10 +40,19 @@ items:
   - id: STR-003
     section: "Storage Module"
     summary: "StorageBackend trait, RocksDB and LMDB implementations"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/crate_structure/specs/STR-003.md"
-    tests: []
-    notes: ""
+    tests:
+      - vv_req_str_003_storage_trait_defined
+      - vv_req_str_003_schema_constants_defined
+      - vv_req_str_003_key_encoding_coin_id
+      - vv_req_str_003_key_encoding_puzzle_hash_coin
+      - vv_req_str_003_key_encoding_height_coin
+      - vv_req_str_003_height_keys_sort_correctly
+      - vv_req_str_003_rocksdb_put_get_delete
+      - vv_req_str_003_rocksdb_batch_write
+      - vv_req_str_003_rocksdb_prefix_scan
+    notes: "9 tests: trait exists with Send+Sync bounds, 12 CF constants, key encoding round-trips (coin_id, puzzle_hash+coin_id, height+coin_id), height sort order, RocksDB CRUD (put/get/delete), batch write atomicity, prefix scan. LMDB placeholder compiles. Clippy clean."
 
   - id: STR-004
     section: "Merkle Module"
