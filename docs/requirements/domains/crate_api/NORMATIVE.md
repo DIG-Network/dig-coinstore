@@ -13,7 +13,7 @@
 
 ## &sect;2 Core Types
 
-<a id="API-002"></a>**API-002** `CoinRecord` MUST be a public struct deriving `Debug, Clone, Serialize, Deserialize` with fields: coin (Coin), confirmed_height (u64), spent_height (Option<u64>), coinbase (bool), timestamp (u64), ff_eligible (bool). It MUST provide methods: `new()`, `is_spent()`, `spend()`, `coin_id()`, `to_coin_state()`.
+<a id="API-002"></a>**API-002** `CoinRecord` MUST be a public struct deriving `Debug, Clone, Serialize, Deserialize` with fields: coin (Coin), confirmed_height (u64), spent_height (Option<u64>), coinbase (bool), timestamp (u64), ff_eligible (bool). It MUST provide methods: `new()`, `is_spent()`, `spend()`, `coin_id()`, `to_coin_state()`, `from_chia_coin_record()`, `to_chia_coin_record()`. The interop conversion methods enable bidirectional conversion with `chia_protocol::CoinRecord` (see SPEC Design Decision 12).
 > **Spec:** [`API-002.md`](specs/API-002.md)
 
 <a id="API-003"></a>**API-003** `CoinStoreConfig` MUST be a public struct with a builder pattern (`with_*` methods) and documented default values for all fields: backend (StorageBackend), storage_path, max_snapshots, max_query_results, lmdb_map_size, rocksdb_write_buffer_size, rocksdb_max_open_files, bloom_filter.

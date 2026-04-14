@@ -45,10 +45,10 @@
 
 ## Hard Requirements
 
-1. **Use chia crate ecosystem first** — never reimplement what `chia-protocol`, `chia-sdk-coinset`, `chia-bls`, `chia-sdk-types` provide.
+1. **Use chia crate ecosystem first** — never reimplement what `chia-protocol`, `chia-sha2`, `chia-traits`, `chia-consensus` provide. Use `chia-sha2::Sha256` for all SHA-256 operations. Use `chia-protocol::CoinStateFilters` for batch query filters.
 2. **No custom coin ID computation** — use `Coin::coin_id()` from `chia-protocol`.
-3. **No custom serialization for Chia types** — use `Streamable` from `chia-traits` or `serde` via existing impls.
-4. **Re-export, don't redefine** — `Coin`, `Bytes32`, `CoinState` from upstream via dig-clvm.
+3. **No custom serialization for Chia types** — use `Streamable` from `chia-traits` for wire format; `bincode` for internal KV storage only.
+4. **Re-export, don't redefine** — `Coin`, `Bytes32`, `CoinState`, `CoinStateFilters` from upstream via dig-clvm. `chia_protocol::CoinRecord` aliased as `ChiaCoinRecord` for interop.
 5. **No CLVM execution** — this crate stores and queries state; it never runs puzzles.
 6. **No block production** — this crate applies pre-validated blocks; it never selects transactions.
 7. **TEST FIRST (TDD)** — write the failing test before writing implementation code. The test defines the contract. The spec's Test Plan section tells you exactly what tests to write.
@@ -68,12 +68,14 @@
 |-----------|-------|---------|
 | CLVM types (re-export) | `dig-clvm` | 0.1.0 |
 | Network constants | `dig-constants` | 0.1.0 |
-| Protocol types | `chia-protocol` | 0.26 |
-| Coin state types | `chia-sdk-coinset` | 0.30 |
-| Traits | `chia-traits` | 0.26 |
+| Protocol types | `chia-protocol` | 0.42 |
+| SHA-256 | `chia-sha2` | 0.42 |
+| Streamable trait | `chia-traits` | 0.42 |
+| Merkle cross-check (dev) | `chia-consensus` | 0.42 |
+| Test oracle (dev) | `chia-sdk-test` | 0.33 |
 | Storage (RocksDB) | `rocksdb` | 0.22 |
 | Storage (LMDB) | `heed` | 0.20 |
-| Serialization | `bincode` | 1.3 |
+| Serialization (storage) | `bincode` | 1.3 |
 | Serialization | `serde` | latest |
 | Locking | `parking_lot` | 0.12 |
 | Error handling | `thiserror` | 2 |

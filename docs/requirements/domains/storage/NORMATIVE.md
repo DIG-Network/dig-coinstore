@@ -51,5 +51,5 @@
 
 ## &sect;7 Serialization
 
-<a id="STO-008"></a>**STO-008** `CoinRecord` and snapshot data MUST be serialized using bincode. Key encoding helpers MUST be provided in `schema.rs`.
+<a id="STO-008"></a>**STO-008** `CoinRecord` and snapshot data MUST be serialized using bincode for internal KV storage. Key encoding helpers MUST be provided in `schema.rs`. Wire-format serialization of `chia-protocol` types (e.g., `CoinState`) SHOULD use `chia-traits::Streamable` for Chia ecosystem compatibility — this is the caller's responsibility, not the storage layer's.
 > **Spec:** [`STO-008.md`](specs/STO-008.md)

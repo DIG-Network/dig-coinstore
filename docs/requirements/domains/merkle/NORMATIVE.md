@@ -33,5 +33,5 @@
 
 ## &sect;4 Leaf Hash Function
 
-<a id="MRK-006"></a>**MRK-006** The leaf hash function MUST be `coin_record_hash(record) = sha256(bincode::serialize(record))`. This function MUST be deterministic -- the same `CoinRecord` always produces the same hash regardless of platform or serialization version. This hash is used as the leaf value in the sparse Merkle tree.
+<a id="MRK-006"></a>**MRK-006** The leaf hash function MUST be `coin_record_hash(record) = chia_sha2::Sha256(bincode::serialize(record))`. The SHA-256 implementation MUST be `chia_sha2::Sha256` (the same crate used by `Coin::coin_id()`). This function MUST be deterministic — the same `CoinRecord` always produces the same hash regardless of platform or serialization version. This hash is used as the leaf value in the sparse Merkle tree.
 > **Spec:** [`MRK-006.md`](specs/MRK-006.md)

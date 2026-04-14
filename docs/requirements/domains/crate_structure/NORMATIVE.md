@@ -6,7 +6,7 @@
 
 ## §1 Cargo.toml
 
-<a id="STR-001"></a>**STR-001** The crate MUST be named `dig-coinstore` with `lib` crate type. `Cargo.toml` MUST declare dependencies on `chia-protocol`, `chia-sdk-coinset`, `dig-clvm`, `dig-constants`, `rocksdb`, `heed` (LMDB), `bincode`, `serde`, `parking_lot`, `thiserror`, and `tracing`. Storage backends MUST be feature-gated: `lmdb-storage`, `rocksdb-storage`, `full-storage` (both). The default feature MUST be `rocksdb-storage`.
+<a id="STR-001"></a>**STR-001** The crate MUST be named `dig-coinstore` with `lib` crate type. `Cargo.toml` MUST declare dependencies on `chia-protocol`, `chia-sha2`, `chia-traits`, `dig-clvm`, `dig-constants`, `rocksdb`, `heed` (LMDB), `bincode`, `serde`, `parking_lot`, `thiserror`, and `tracing`. Dev-dependencies MUST include `chia-consensus` and `chia-sdk-test`. Storage backends MUST be feature-gated: `lmdb-storage`, `rocksdb-storage`, `full-storage` (both). The default feature MUST be `rocksdb-storage`.
 > **Spec:** [`STR-001.md`](specs/STR-001.md)
 
 ---
@@ -87,7 +87,7 @@ dig-coinstore/
 
 ## §5 Re-export Strategy
 
-<a id="STR-005"></a>**STR-005** `src/lib.rs` MUST re-export `Coin`, `Bytes32`, and `CoinState` from `chia-protocol` via `dig-clvm`. The crate MUST NOT define its own `Coin` or `Bytes32` types. All Chia ecosystem types MUST be accessed through `dig-clvm` re-exports to maintain a single integration point.
+<a id="STR-005"></a>**STR-005** `src/lib.rs` MUST re-export `Coin`, `Bytes32`, `CoinState`, and `CoinStateFilters` from `chia-protocol` via `dig-clvm`. The crate MUST NOT define its own `Coin`, `Bytes32`, or `CoinStateFilters` types. All Chia ecosystem types MUST be accessed through `dig-clvm` re-exports to maintain a single integration point. `chia_protocol::CoinRecord` MUST be re-exported as `ChiaCoinRecord` (aliased) for interop conversions.
 > **Spec:** [`STR-005.md`](specs/STR-005.md)
 
 ---
