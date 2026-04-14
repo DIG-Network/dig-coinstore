@@ -6,18 +6,25 @@ items:
   - id: API-001
     section: "Construction"
     summary: "CoinStore::new(), CoinStore::with_config(), init_genesis() constructors"
-    status: draft
+    status: verified
     spec_ref: "docs/requirements/domains/crate_api/specs/API-001.md"
-    tests: []
-    notes: "new(path) with defaults, with_config(config) custom, init_genesis() for bootstrap. Returns Result<Self, CoinStoreError>."
+    tests:
+      - vv_req_api_001_new_returns_ok
+      - vv_req_api_001_with_config_returns_ok
+      - vv_req_api_001_empty_before_genesis
+      - vv_req_api_001_init_genesis_with_coins
+      - vv_req_api_001_init_genesis_empty_coins
+      - vv_req_api_001_double_genesis_rejected
+      - vv_req_api_001_reopen_existing_store
+    notes: "7 tests in dedicated file tests/api_001_tests.rs. CoinStore with RocksDB backend, CoinStoreConfig with defaults, CoinStoreError with genesis variants, init_genesis with Merkle tree + all secondary indices, re-open persistence verified."
 
   - id: API-002
     section: "Core Types"
-    summary: "CoinRecord struct with all fields and derived methods"
+    summary: "CoinRecord struct with all fields, derived methods, and chia-protocol interop conversions"
     status: draft
     spec_ref: "docs/requirements/domains/crate_api/specs/API-002.md"
     tests: []
-    notes: "6 fields, Debug+Clone+Serialize+Deserialize, 5 methods: new(), is_spent(), spend(), coin_id(), to_coin_state()"
+    notes: "6 fields, Debug+Clone+Serialize+Deserialize, 7 methods: new(), is_spent(), spend(), coin_id(), to_coin_state(), from_chia_coin_record(), to_chia_coin_record(). Interop with chia_protocol::CoinRecord."
 
   - id: API-003
     section: "Core Types"

@@ -2,7 +2,7 @@
 
 | ID | Status | Summary | Verification Approach |
 |----|--------|---------|----------------------|
-| [API-001](NORMATIVE.md#API-001) | -- | CoinStore constructors | Tests: new(path) compiles and returns Result, with_config() respects custom config, init_genesis() bootstraps chain, empty on construction, height()==0 after genesis, duplicate genesis returns GenesisAlreadyInitialized. |
+| [API-001](NORMATIVE.md#API-001) | ✅ | CoinStore constructors | 7 tests (tests/api_001_tests.rs): new() Ok, with_config() Ok, empty before genesis, init_genesis with coins (state_root != 0), empty genesis Ok, double genesis rejected, re-open preserves state. |
 | [API-002](NORMATIVE.md#API-002) | -- | CoinRecord struct | Tests: all 6 fields accessible, new() creates unspent record, is_spent() false for new/true after spend(), spend() sets spent_height, coin_id() matches Coin::coin_id(), to_coin_state() produces correct CoinState, Debug/Clone/Serialize/Deserialize derives. |
 | [API-003](NORMATIVE.md#API-003) | -- | CoinStoreConfig builder | Tests: all defaults match spec table, builder chaining, preserves unset fields, 8 with_* methods, StorageBackend enum variants, Default trait, CoinStore integration. |
 | [API-004](NORMATIVE.md#API-004) | -- | CoinStoreError enum | Tests: all 15 variants constructible, Clone round-trip, PartialEq equality/inequality, Display formatting via thiserror, Error trait, structured data types correct. |
