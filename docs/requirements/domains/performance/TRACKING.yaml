@@ -1,0 +1,76 @@
+domain_id: performance
+normative: NORMATIVE.md
+verification: VERIFICATION.md
+
+items:
+  - id: PRF-001
+    section: "In-Memory Unspent Set"
+    summary: "HashSet<CoinId> for O(1) is_unspent(). ~40 bytes/coin. Insert/remove/re-insert on create/spend/rollback. Startup population in 50K chunks."
+    status: gap
+    spec_ref: "docs/requirements/domains/performance/specs/PRF-001.md"
+    tests: []
+    notes: ""
+
+  - id: PRF-002
+    section: "LRU Coin Record Cache"
+    summary: "LRU cache with DEFAULT_COIN_CACHE_CAPACITY (1M) entries. Write-through on apply_block, invalidate on rollback. Not persisted."
+    status: gap
+    spec_ref: "docs/requirements/domains/performance/specs/PRF-002.md"
+    tests: []
+    notes: ""
+
+  - id: PRF-003
+    section: "Materialized Aggregate Counters"
+    summary: "unspent_count, spent_count, total_value updated in same WriteBatch as block. Stored in metadata CF. O(1) reads."
+    status: gap
+    spec_ref: "docs/requirements/domains/performance/specs/PRF-003.md"
+    tests: []
+    notes: ""
+
+  - id: PRF-004
+    section: "Unspent-Only Puzzle Hash Index"
+    summary: "Dedicated unspent_by_puzzle_hash CF. Insert on creation, delete on spend, re-insert on rollback."
+    status: gap
+    spec_ref: "docs/requirements/domains/performance/specs/PRF-004.md"
+    tests: []
+    notes: ""
+
+  - id: PRF-005
+    section: "Tiered Spent Coin Archival"
+    summary: "ArchiveConfig: archive_after_blocks (1000), prune_archived (false). Background migration to archive_coin_records CF."
+    status: gap
+    spec_ref: "docs/requirements/domains/performance/specs/PRF-005.md"
+    tests: []
+    notes: ""
+
+  - id: PRF-006
+    section: "Snapshot-Based Fast Sync"
+    summary: "Checkpoint snapshots with Merkle root. Download, verify root, restore, resume from snapshot height."
+    status: gap
+    spec_ref: "docs/requirements/domains/performance/specs/PRF-006.md"
+    tests: []
+    notes: ""
+
+  - id: PRF-007
+    section: "Height-Partitioned Indices"
+    summary: "Compound key height_bucket||height||coin_id for confirmed/spent height indices. Old buckets settle into cold LSM levels."
+    status: gap
+    spec_ref: "docs/requirements/domains/performance/specs/PRF-007.md"
+    tests: []
+    notes: ""
+
+  - id: PRF-008
+    section: "Snapshot/Restore Persistence"
+    summary: "save_snapshot(), load_snapshot(height), load_latest_snapshot(), available_snapshot_heights(). Auto-prune beyond max_snapshots."
+    status: gap
+    spec_ref: "docs/requirements/domains/performance/specs/PRF-008.md"
+    tests: []
+    notes: ""
+
+  - id: PRF-009
+    section: "Benchmark Tests"
+    summary: "criterion benchmarks for 11 performance targets from SPEC Section 13.12: is_unspent, get_coin_record hit/miss, puzzle hash query, apply_block, rollback, counters, state_root, coin proof, startup, snapshot."
+    status: gap
+    spec_ref: "docs/requirements/domains/performance/specs/PRF-009.md"
+    tests: []
+    notes: ""

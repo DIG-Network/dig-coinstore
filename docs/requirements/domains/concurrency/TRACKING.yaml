@@ -1,0 +1,36 @@
+domain_id: concurrency
+normative: NORMATIVE.md
+verification: VERIFICATION.md
+
+items:
+  - id: CON-001
+    section: "Thread Safety"
+    summary: "CoinStore MUST be Send + Sync. All public methods callable from any thread."
+    status: gap
+    spec_ref: "docs/requirements/domains/concurrency/specs/CON-001.md"
+    tests: []
+    notes: ""
+
+  - id: CON-002
+    section: "RwLock Strategy"
+    summary: "Shared read lock for queries, exclusive write lock for apply_block and rollback. parking_lot::RwLock."
+    status: gap
+    spec_ref: "docs/requirements/domains/concurrency/specs/CON-002.md"
+    tests: []
+    notes: ""
+
+  - id: CON-003
+    section: "MVCC Reads During Writes"
+    summary: "Readers see consistent pre-block state during Phase 2. RocksDB snapshot before write; LMDB natural MVCC. Atomic tip swap."
+    status: gap
+    spec_ref: "docs/requirements/domains/concurrency/specs/CON-003.md"
+    tests: []
+    notes: ""
+
+  - id: CON-004
+    section: "Parallel Removal Validation"
+    summary: "Phase 1 removal checks parallelized via rayon par_iter over in-memory unspent set. Lock-free during validation."
+    status: gap
+    spec_ref: "docs/requirements/domains/concurrency/specs/CON-004.md"
+    tests: []
+    notes: ""

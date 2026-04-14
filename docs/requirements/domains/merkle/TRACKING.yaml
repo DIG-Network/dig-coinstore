@@ -1,0 +1,52 @@
+domain_id: merkle
+normative: NORMATIVE.md
+verification: VERIFICATION.md
+
+items:
+  - id: MRK-001
+    section: "Sparse Merkle Tree"
+    summary: "SparseMerkleTree with batch_insert, batch_update, batch_remove, root(); deferred recomputation; 256-level tree"
+    status: gap
+    spec_ref: "docs/requirements/domains/merkle/specs/MRK-001.md"
+    tests: []
+    notes: ""
+
+  - id: MRK-002
+    section: "Sparse Merkle Tree"
+    summary: "Memoized empty hashes in OnceLock<[Bytes32; 257]> for O(1) empty subtree lookup"
+    status: gap
+    spec_ref: "docs/requirements/domains/merkle/specs/MRK-002.md"
+    tests: []
+    notes: ""
+
+  - id: MRK-003
+    section: "Persistent Storage"
+    summary: "merkle_nodes CF with dirty node tracking, incremental flush in same WriteBatch, startup loads only root"
+    status: gap
+    spec_ref: "docs/requirements/domains/merkle/specs/MRK-003.md"
+    tests: []
+    notes: ""
+
+  - id: MRK-004
+    section: "Proof Generation & Verification"
+    summary: "get_coin_proof(coin_id) returns SparseMerkleProof with 256-level sibling path for existing and non-existing coins"
+    status: gap
+    spec_ref: "docs/requirements/domains/merkle/specs/MRK-004.md"
+    tests: []
+    notes: ""
+
+  - id: MRK-005
+    section: "Proof Generation & Verification"
+    summary: "Static verify(proof, expected_root) -> bool for inclusion and non-inclusion proofs"
+    status: gap
+    spec_ref: "docs/requirements/domains/merkle/specs/MRK-005.md"
+    tests: []
+    notes: ""
+
+  - id: MRK-006
+    section: "Leaf Hash Function"
+    summary: "coin_record_hash(record) = sha256(bincode::serialize(record)), deterministic leaf hash"
+    status: gap
+    spec_ref: "docs/requirements/domains/merkle/specs/MRK-006.md"
+    tests: []
+    notes: ""
