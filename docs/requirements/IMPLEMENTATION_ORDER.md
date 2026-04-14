@@ -14,7 +14,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 - [x] STR-003 — Storage module (`src/storage/`) with backend trait and implementations
 - [x] STR-004 — Merkle module (`src/merkle/`) with sparse Merkle tree
 - [x] STR-005 — Re-export strategy (Coin, Bytes32, CoinState, CoinStateFilters via `dig-clvm`; ChiaCoinRecord alias)
-- [ ] STR-006 — Test infrastructure (`tests/` layout, helpers, fixtures)
+- [x] STR-006 — Test infrastructure (`tests/` layout, helpers, fixtures)
 
 ## Phase 1: Crate API Types
 
