@@ -45,8 +45,8 @@ items:
 
   - id: MRK-006
     section: "Leaf Hash Function"
-    summary: "coin_record_hash(record) = sha256(bincode::serialize(record)), deterministic leaf hash"
+    summary: "coin_record_hash(record) = chia_sha2::Sha256(bincode::serialize(record)), deterministic leaf hash using Chia's SHA-256"
     status: gap
     spec_ref: "docs/requirements/domains/merkle/specs/MRK-006.md"
     tests: []
-    notes: ""
+    notes: "Uses chia_sha2::Sha256 for hash compatibility with Chia ecosystem"

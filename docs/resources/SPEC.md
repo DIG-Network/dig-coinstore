@@ -45,13 +45,16 @@ The coinstate operates on the **coinset model** (UTXO-like), where coins are cre
 
 | Crate | Purpose |
 |-------|---------|
-| `dig-clvm` | **Types only**. Source of re-exported Chia types: `Coin` (via `chia-protocol`), `Bytes32`, `CoinRecord` (if using chia-sdk-coinset), `CoinState`, `SpendBundle`, `Program`. The coinstate does NOT call dig-clvm validation functions. |
+| `dig-clvm` | **Types only**. Source of re-exported Chia types: `Coin` (via `chia-protocol`), `Bytes32`, `CoinState`, `SpendBundle`, `Program`. The coinstate does NOT call dig-clvm validation functions. |
 | `dig-constants` | Network constants (`NetworkConstants`, `DIG_MAINNET`, `DIG_TESTNET`). Genesis challenge, block cost limits. |
-| `chia-protocol` | Core types: `Coin` (+ `::coin_id()`), `Bytes32`, `CoinState`. |
-| `chia-sdk-coinset` | `CoinRecord` for coin state (coin, confirmed_block_index, spent_block_index, coinbase, timestamp). |
+| `chia-protocol` | Core types: `Coin` (+ `::coin_id()`), `Bytes32`, `CoinState`, `CoinStateFilters`, `CoinRecord` (for interop conversions only — see Design Decision 12). |
+| `chia-sha2` | SHA-256 implementation (`Sha256` hasher). Used for Merkle leaf hashing (`coin_record_hash()`), Merkle internal node hashing, and any other SHA-256 operations in the crate. Ensures hash compatibility with the Chia ecosystem. Transitively depended on via `chia-protocol`, but declared explicitly for direct usage. |
+| `chia-traits` | `Streamable` trait for Chia-canonical binary serialization. Used for wire-format serialization of `CoinState` in sync protocol responses and snapshot interchange. Internal storage continues to use `bincode` (see Design Decision 15). |
+| `chia-consensus` | **Dev-dependency only.** Provides `compute_merkle_set_root()` and `MerkleSet` with proof generation/validation. Used in integration tests to cross-check Merkle computations against the Chia reference implementation. NOT used at runtime — the coinstate uses its own sparse Merkle tree (see Design Decision 13). |
+| `chia-sdk-test` | **Dev-dependency only.** Provides `Simulator`, an in-memory coin store reference implementation. Used in integration tests as an oracle to verify query result parity with the Chia wallet protocol. |
 | `heed` (LMDB) | Primary storage backend. Fast point lookups, ACID transactions, memory-mapped I/O. Feature-gated: `lmdb-storage`. |
 | `rocksdb` | Fallback storage backend. Write-optimized LSM tree with bloom filters. Feature-gated: `rocksdb-storage`. |
-| `bincode` | Compact binary serialization for coin records and snapshots. |
+| `bincode` | Compact binary serialization for coin records and snapshots (internal storage). |
 | `serde` | Serialization framework for persistence and snapshot/restore. |
 | `parking_lot` | `RwLock` for concurrent read access to in-memory indices. |
 | `thiserror` | Error type derivation. |
@@ -63,6 +66,9 @@ The coinstate operates on the **coinset model** (UTXO-like), where coins are cre
 | `Coin` | chia-protocol | Coin identity. `::coin_id()` computes `sha256(parent \|\| puzzle_hash \|\| amount)`. Fields: `parent_coin_info`, `puzzle_hash`, `amount`. |
 | `Bytes32` | chia-protocol | 32-byte hash for coin IDs, puzzle hashes, block hashes, state roots, hints. |
 | `CoinState` | chia-protocol | Lightweight coin state for sync protocol: `coin`, `created_height`, `spent_height`. |
+| `CoinStateFilters` | chia-protocol | Filter parameters for batch coin state queries: `include_spent`, `include_unspent`, `include_hinted`, `min_amount`. Adopted directly from Chia's protocol messages to ensure wire-level compatibility. |
+| `CoinRecord` (chia) | chia-protocol | Chia's native coin record type (`confirmed_block_index: u32`, `spent_block_index: u32`, `coinbase`, `timestamp`). Used for interop conversions only — `dig-coinstore` defines its own `CoinRecord` with extended fields (see Design Decision 12). |
+| `Sha256` | chia-sha2 | SHA-256 hasher used for Merkle leaf hashing and internal node hashing. Same implementation used by `Coin::coin_id()` internally. |
 
 ### 1.3 Design Decisions
 
@@ -79,6 +85,10 @@ The coinstate operates on the **coinset model** (UTXO-like), where coins are cre
 | 9 | Snapshot pruning with configurable retention | Old snapshots are automatically pruned to bound disk usage. Default: keep last 10 snapshots. |
 | 10 | Puzzle hash index uses composite key | `puzzle_hash + coin_id` as key enables prefix scans for all coins with a given puzzle hash. Matches Chia's [`coin_puzzle_hash`](https://github.com/Chia-Network/chia-blockchain/blob/6e7a4954edccd8ab83fcacf938cfc42ddfcad7f2/chia/full_node/coin_store.py#L66) index. |
 | 11 | Parent coin index | Index by `parent_coin_info` for efficient child-coin lookups. Matches Chia's [`coin_parent_index`](https://github.com/Chia-Network/chia-blockchain/blob/6e7a4954edccd8ab83fcacf938cfc42ddfcad7f2/chia/full_node/coin_store.py#L69). |
+| 12 | Custom `CoinRecord` instead of `chia-protocol::CoinRecord` | `chia-protocol::CoinRecord` uses `u32` heights and a `spent_block_index: u32` sentinel (0 = unspent). dig-coinstore uses `u64` heights (future-proof beyond 4B blocks), `Option<u64>` for `spent_height` (idiomatic Rust, no sentinel ambiguity), and adds `ff_eligible: bool` (not present in any Chia crate). Interop conversion methods (`from_chia_coin_record()`, `to_chia_coin_record()`) are provided. The `chia-sdk-coinset::CoinRecord` was evaluated but rejected — it is an RPC client response type with a redundant `spent: bool` field and serde JSON annotations unsuitable for storage. |
+| 13 | Custom sparse Merkle tree instead of `chia-consensus::MerkleSet` | `chia-consensus::MerkleSet` is a hash-sorted Merkle set designed for block-level coin commitments (recomputed from scratch each time). dig-coinstore needs a **persistent, incremental** sparse Merkle tree keyed by coin_id bit paths (fixed 256-level) that supports batch updates, dirty node tracking, lazy loading, and proof generation without full reconstruction. These are fundamentally different data structures. `chia-consensus` is used as a dev-dependency for cross-checking in tests. |
+| 14 | `CoinStateFilters` from `chia-protocol` for batch query parameters | `batch_coin_states_by_puzzle_hashes()` accepts a `CoinStateFilters` struct from `chia-protocol` instead of four separate boolean/integer parameters. This ensures direct wire-level compatibility with Chia's peer protocol messages (`RequestPuzzleState`, `CoinStateFilters`) and reduces API surface. |
+| 15 | `chia-sha2` for all SHA-256 operations | All SHA-256 operations (Merkle leaf hashing, internal node hashing) use `chia-sha2::Sha256` to ensure hash compatibility with the Chia ecosystem. `Coin::coin_id()` already uses `chia-sha2` internally. `bincode` remains the serialization format for internal storage; `chia-traits::Streamable` is available for wire-format serialization of protocol types like `CoinState`. |
 
 ### 1.4 Chia CoinStore Parity
 
@@ -219,6 +229,18 @@ impl CoinRecord {
 
     /// Convert to a lightweight CoinState for sync protocol.
     pub fn to_coin_state(&self) -> CoinState;
+
+    /// Convert from a `chia-protocol::CoinRecord` for interop.
+    /// `ff_eligible` defaults to `false` (not present in Chia's CoinRecord).
+    /// Heights are widened from `u32` to `u64`. `spent_block_index == 0` maps
+    /// to `spent_height = None`.
+    pub fn from_chia_coin_record(record: chia_protocol::CoinRecord) -> Self;
+
+    /// Convert to a `chia-protocol::CoinRecord` for interop.
+    /// Heights are narrowed from `u64` to `u32` (panics if height > u32::MAX).
+    /// `spent_height = None` maps to `spent_block_index = 0`.
+    /// `ff_eligible` is lost (not representable in Chia's CoinRecord).
+    pub fn to_chia_coin_record(&self) -> chia_protocol::CoinRecord;
 }
 ```
 
@@ -620,14 +642,16 @@ impl CoinStore {
     ///   Chia: coin_store.py:498.
     ///
     /// Chia: coin_store.py:446-559.
+    ///
+    /// The `filters` parameter uses `chia_protocol::CoinStateFilters` directly,
+    /// matching the Chia peer protocol wire format for `RequestPuzzleState`.
+    /// This ensures callers can pass Chia protocol messages through without
+    /// field-by-field decomposition.
     pub fn batch_coin_states_by_puzzle_hashes(
         &self,
         puzzle_hashes: &[Bytes32],
         min_height: u64,
-        include_spent: bool,
-        include_unspent: bool,
-        include_hinted: bool,
-        min_amount: u64,
+        filters: CoinStateFilters,
         max_items: usize,
     ) -> Result<(Vec<CoinState>, Option<u64>), CoinStoreError>;
 }
@@ -1371,9 +1395,16 @@ When a rollback deletes coins created after the target height, all associated hi
 
 The coinstate maintains a sparse Merkle tree over all coin records. Each coin record is hashed and inserted at the position determined by its `coin_id`. The root of this tree is the `state_root` committed in every block header.
 
+All hashing operations in the Merkle tree (leaf hashing, internal node hashing) use `chia_sha2::Sha256` to ensure hash compatibility with the Chia ecosystem. This is the same SHA-256 implementation used internally by `Coin::coin_id()`.
+
 ```rust
+use chia_sha2::Sha256;
+
 fn coin_record_hash(record: &CoinRecord) -> Bytes32 {
-    sha256(&bincode::serialize(record).unwrap())
+    let serialized = bincode::encode_to_vec(record, /* config */).unwrap();
+    let mut hasher = Sha256::new();
+    hasher.update(&serialized);
+    Bytes32::from(hasher.finalize())
 }
 ```
 
@@ -1524,10 +1555,27 @@ All Chia `CoinStoreProtocol` methods ([`coin_store_protocol.py`](https://github.
 | Aggregate queries | Not built-in | `aggregate_unspent_by_puzzle_hash()`, `total_unspent_value()` |
 | Bloom filters | Not applicable (SQLite) | RocksDB: 10 bits/key for point lookups |
 | Concurrency | async/await with SQLite | `RwLock` with LMDB MVCC or RocksDB locks |
+| SHA-256 implementation | Python `hashlib` | `chia-sha2::Sha256` (same crate used by `chia-protocol`) |
+| CoinRecord type | Python dataclass | Custom Rust struct with `from_chia_coin_record()`/`to_chia_coin_record()` interop |
+| Batch query filters | Separate parameters | `chia_protocol::CoinStateFilters` struct (wire-compatible) |
+| CoinState serialization | Python Streamable | `chia-protocol::CoinState` with `chia-traits::Streamable` for wire format |
 
-### 12.3 Crate Boundary
+### 12.3 Chia Crate Utilization
 
-`dig-coinstore` is a **library crate** (`lib`). It is strictly a **coinstate manager**: inputs are pre-validated block state changes, outputs are coin records and state roots. It does **not** include:
+The following table summarizes how `dig-coinstore` uses each Chia ecosystem crate, and why certain crate features are used or intentionally not used:
+
+| Chia Crate | What We Use | What We Don't Use (and Why) |
+|-----------|-------------|----------------------------|
+| `chia-protocol` | `Coin`, `Bytes32`, `CoinState`, `CoinStateFilters`, `CoinRecord` (interop only) | `SpendBundle`, `CoinSpend`, `Program` — coinstore doesn't execute CLVM or handle transactions |
+| `chia-sha2` | `Sha256` for Merkle leaf/node hashing | — (full crate used) |
+| `chia-traits` | `Streamable` for `CoinState` wire serialization | Not used for internal storage (bincode is more compact for KV storage) |
+| `chia-consensus` (dev) | `compute_merkle_set_root()`, `MerkleSet` for test cross-checks | NOT used at runtime — its `MerkleSet` is hash-sorted (recomputed from scratch), incompatible with our persistent sparse Merkle tree |
+| `chia-sdk-test` (dev) | `Simulator` as oracle for query parity tests | Not used at runtime |
+| `dig-clvm` | Type re-exports (`Coin`, `Bytes32`, `CoinState`) | Validation functions — coinstore receives pre-validated data |
+
+### 12.4 Crate Boundary
+
+`dig-coinstore` is a **library crate** (`lib`). It is strictly a **coinstate manager**: inputs are pre-validated block state changes, outputs are coin records and state roots. It does **not** include (all are outside this crate and handled by other DIG or Chia crates):
 
 - **CLVM execution** (puzzle running, condition parsing). The caller extracts additions, removals, and hints from CLVM conditions before calling `apply_block()`.
 - **Block production** (transaction selection, generator building). Handled by `dig-mempool` + block producer.

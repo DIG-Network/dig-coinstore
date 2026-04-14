@@ -48,7 +48,7 @@
 
 ## &sect;7 Batch Coin State Pagination
 
-<a id="QRY-007"></a>**QRY-007** `batch_coin_states_by_puzzle_hashes(puzzle_hashes, min_height, include_spent, include_unspent, include_hinted, min_amount, max_items)` MUST return `(Vec<CoinState>, Option<u64>)` per SPEC Section 3.5. MUST enforce `MAX_PUZZLE_HASH_BATCH_SIZE`, MUST support `include_spent`/`include_unspent`/`include_hinted` filters, MUST support `min_amount` filtering, MUST sort by `MAX(confirmed_height, spent_height)` ASC with deterministic tiebreaking, MUST preserve block boundaries (never split a block across pages), and MUST fetch `max_items + 1` to detect pagination continuation via `Option<u64>` cursor.
+<a id="QRY-007"></a>**QRY-007** `batch_coin_states_by_puzzle_hashes(puzzle_hashes, min_height, filters: CoinStateFilters, max_items)` MUST return `(Vec<CoinState>, Option<u64>)` per SPEC Section 3.5. The `filters` parameter MUST use `chia_protocol::CoinStateFilters` directly (re-exported via `dig-clvm`) to ensure wire-level compatibility with Chia's `RequestPuzzleState`. MUST enforce `MAX_PUZZLE_HASH_BATCH_SIZE`, MUST support `include_spent`/`include_unspent`/`include_hinted` filters, MUST support `min_amount` filtering, MUST sort by `MAX(confirmed_height, spent_height)` ASC with deterministic tiebreaking, MUST preserve block boundaries (never split a block across pages), and MUST fetch `max_items + 1` to detect pagination continuation via `Option<u64>` cursor.
 > **Spec:** [`QRY-007.md`](specs/QRY-007.md)
 
 ---

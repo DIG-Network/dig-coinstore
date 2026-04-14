@@ -1,14 +1,4 @@
-//! # STO Domain Tests — Storage Backend Verification
-//!
-//! Tests verifying the storage backend trait and implementations per
-//! `docs/requirements/domains/storage/` and
-//! `docs/requirements/domains/crate_structure/specs/STR-003.md`.
-//!
-//! These tests prove:
-//! - The `StorageBackend` trait is defined with all required methods
-//! - Both RocksDB and LMDB backends implement the trait
-//! - Schema constants and key encoding helpers work correctly
-//! - Basic CRUD operations work through the trait interface
+//! # STR-003 Tests — Storage Module
 
 mod helpers;
 

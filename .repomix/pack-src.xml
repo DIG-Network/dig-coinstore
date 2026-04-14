@@ -1,0 +1,1483 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+archive.rs
+block_apply.rs
+cache/counters.rs
+cache/lru_cache.rs
+cache/mod.rs
+cache/unspent_set.rs
+coin_store.rs
+config.rs
+error.rs
+hints.rs
+lib.rs
+merkle/mod.rs
+merkle/persistent.rs
+merkle/proof.rs
+queries.rs
+rollback.rs
+storage/lmdb.rs
+storage/mod.rs
+storage/rocksdb.rs
+storage/schema.rs
+types.rs
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="archive.rs">
+//! Tiered spent coin archival for dig-coinstore.
+//!
+//! Manages the hot/archive/prune tiers for spent coin records. Coins spent
+//! beyond the rollback window are migrated from the hot tier (full indexing)
+//! to the archive tier (coin ID only) as a background operation.
+//!
+//! # Requirements: PRF-005
+//! # Spec: docs/requirements/domains/performance/specs/PRF-005.md
+//! # SPEC.md: Section 13.1 (Tiered Coin Storage)
+</file>
+
+<file path="block_apply.rs">
+//! Block application pipeline for dig-coinstore.
+//!
+//! Implements the `apply_block()` method on [`CoinStore`]: Phase 1 validation
+//! (height, parent hash, reward coins, removals, additions, hints) followed by
+//! Phase 2 atomic mutation (coin insertion, spend marking, hint storage,
+//! Merkle update, chain tip commit).
+//!
+//! # Requirements: BLK-001 through BLK-014
+//! # Spec: docs/requirements/domains/block_application/specs/
+//! # SPEC.md: Section 5 (Block Application Pipeline)
+</file>
+
+<file path="cache/counters.rs">
+//! Materialized aggregate counters.
+//!
+//! Running totals of `unspent_count`, `spent_count`, and `total_value`
+//! updated atomically in the same WriteBatch as block application.
+//! Stored in the metadata CF for persistence across restarts.
+//!
+//! Provides O(1) reads for `num_unspent()`, `total_unspent_value()`,
+//! and `stats()` instead of full-table scans.
+//!
+//! # Requirements: PRF-003
+//! # Spec: docs/requirements/domains/performance/specs/PRF-003.md
+//! # SPEC.md: Section 13.7 (Materialized Aggregate Counters)
+</file>
+
+<file path="cache/lru_cache.rs">
+//! LRU coin record cache.
+//!
+//! Write-through LRU cache of recently accessed `CoinRecord`s.
+//! Capacity: `DEFAULT_COIN_CACHE_CAPACITY` (1M entries, ~200 MB).
+//! Cache hits avoid storage I/O entirely.
+//!
+//! Write-through on `apply_block()`, full invalidation on `rollback()`.
+//! Not persisted — rebuilt from storage on demand.
+//!
+//! # Requirements: PRF-002
+//! # Spec: docs/requirements/domains/performance/specs/PRF-002.md
+//! # SPEC.md: Section 13.3 (LRU Coin Record Cache)
+</file>
+
+<file path="cache/mod.rs">
+//! In-memory caching layer for dig-coinstore.
+//!
+//! Three complementary caches that accelerate the hot path:
+//! - [`unspent_set`]: `HashSet<CoinId>` for O(1) "is unspent?" checks
+//! - [`lru_cache`]: LRU `CoinRecord` cache for repeat point lookups
+//! - [`counters`]: Materialized aggregate counters (unspent_count, total_value)
+//!
+//! All caches are maintained incrementally during block application and
+//! rollback, and populated from storage on startup.
+//!
+//! # Requirements: PRF-001, PRF-002, PRF-003
+//! # Spec: docs/requirements/domains/performance/specs/
+
+pub mod counters;
+pub mod lru_cache;
+pub mod unspent_set;
+</file>
+
+<file path="cache/unspent_set.rs">
+//! In-memory unspent coin ID set.
+//!
+//! `HashSet<CoinId>` providing O(1) lock-free "is this coin unspent?" checks.
+//! At ~40 bytes per coin, 10M unspent coins consume ~400 MB.
+//!
+//! Maintained incrementally: insert on creation, remove on spend,
+//! re-insert on rollback un-spend. Populated from storage on startup
+//! in `MATERIALIZATION_BATCH_SIZE` chunks.
+//!
+//! # Requirements: PRF-001
+//! # Spec: docs/requirements/domains/performance/specs/PRF-001.md
+//! # SPEC.md: Section 13.2 (In-Memory Unspent Set)
+</file>
+
+<file path="coin_store.rs">
+//! CoinStore — the primary public API struct for dig-coinstore.
+//!
+//! Orchestrates block application, rollback, queries, hints, caching,
+//! and Merkle tree operations. All public methods are defined here or
+//! on `impl CoinStore` blocks in domain-specific modules.
+//!
+//! # Requirement: API-001
+//! # Spec: docs/requirements/domains/crate_api/specs/API-001.md
+</file>
+
+<file path="config.rs">
+//! Configuration types and constants for dig-coinstore.
+//!
+//! Contains [`CoinStoreConfig`] with builder pattern and all tunable parameters,
+//! plus named constants referenced by the SPEC (Section 2.7).
+//!
+//! # Requirement: API-003
+//! # Spec: docs/requirements/domains/crate_api/specs/API-003.md
+</file>
+
+<file path="error.rs">
+//! Error types for dig-coinstore.
+//!
+//! Defines [`CoinStoreError`] with all error variants for chain validation,
+//! coin existence, spend validity, rollback, storage, and query operations.
+//!
+//! # Requirement: API-004
+//! # Spec: docs/requirements/domains/crate_api/specs/API-004.md
+</file>
+
+<file path="hints.rs">
+//! Hint store for puzzle hash hints on coins.
+//!
+//! Manages the bidirectional hint index: forward (coin_id -> hints) and
+//! reverse (hint -> coin_ids). Supports hint validation, idempotent insertion,
+//! variable-length keys, and rollback cleanup.
+//!
+//! # Requirements: HNT-001 through HNT-006
+//! # Spec: docs/requirements/domains/hints/specs/
+//! # SPEC.md: Section 8 (Hint Store)
+//! # Chia reference: hint_store.py, hint_management.py
+</file>
+
+<file path="lib.rs">
+//! # dig-coinstore
+//!
+//! Persistent global coin state database for the DIG Network L2 blockchain.
+//!
+//! This crate manages the authoritative database of all spent and unspent coins
+//! across the entire blockchain using the coinset model (UTXO-like). It accepts
+//! validated blocks as input, applies their state transitions, and provides a
+//! rich query API for coin lookups by ID, puzzle hash, hint, parent, and height.
+//!
+//! ## Crate boundary
+//!
+//! - **Input:** Pre-validated `BlockData` (additions, removals, coinbase, hints)
+//! - **Output:** `CoinRecord`s, `CoinState`s, state roots, Merkle proofs
+//! - **Not in scope:** CLVM execution, block production, networking, consensus
+//!
+//! ## Storage backends
+//!
+//! Storage is feature-gated:
+//! - `rocksdb-storage` (default) — RocksDB with bloom filters and column families
+//! - `lmdb-storage` — LMDB with memory-mapped I/O
+//! - `full-storage` — Both backends enabled
+//!
+//! ## Module organization
+//!
+//! | Module | Responsibility | Requirement domain |
+//! |--------|---------------|--------------------|
+//! | [`coin_store`] | Primary public API struct | API-001 |
+//! | [`config`] | Configuration types and constants | API-003 |
+//! | [`error`] | Error enum | API-004 |
+//! | [`types`] | Domain types (CoinRecord, BlockData, etc.) | API-002, API-005..009 |
+//! | [`block_apply`] | Block application pipeline | BLK-001..014 |
+//! | [`rollback`] | Rollback / reorg recovery | RBK-001..007 |
+//! | [`queries`] | Coin state queries | QRY-001..011 |
+//! | [`hints`] | Hint store | HNT-001..006 |
+//! | [`storage`] | Backend trait + implementations | STO-001..008 |
+//! | [`merkle`] | Sparse Merkle tree + proofs | MRK-001..006 |
+//! | [`cache`] | In-memory caching (unspent set, LRU, counters) | PRF-001..003 |
+//! | [`archive`] | Tiered spent coin archival | PRF-005 |
+//!
+//! ## Spec reference
+//!
+//! Master specification: `docs/resources/SPEC.md`
+//! Requirements: `docs/requirements/IMPLEMENTATION_ORDER.md`
+//!
+//! See also:
+//! - Chia CoinStore: `chia/full_node/coin_store.py`
+//! - Chia HintStore: `chia/full_node/hint_store.py`
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Re-exports: Chia ecosystem types (STR-005)
+// ─────────────────────────────────────────────────────────────────────────────
+// These re-exports ensure consumers of dig-coinstore can access core Chia types
+// without adding direct dependencies on chia-protocol or dig-clvm.
+//
+// The dependency chain is:
+//   chia-protocol  →  dig-clvm  →  dig-coinstore  →  consumers
+//       (defines)    (re-exports)   (re-exports)
+//
+// Requirement: STR-005
+// Spec: docs/requirements/domains/crate_structure/specs/STR-005.md
+
+/// The fundamental coin type in the Chia coinset model.
+/// `CoinId = sha256(parent_coin_info || puzzle_hash || amount)`.
+/// Re-exported from `dig-clvm` (which re-exports from `chia-protocol`).
+pub use dig_clvm::Coin;
+
+/// A 32-byte hash used for coin IDs, puzzle hashes, block hashes, state roots.
+/// Re-exported from `dig-clvm` (which re-exports from `chia-protocol`).
+pub use dig_clvm::Bytes32;
+
+/// Lightweight coin state for the sync protocol: coin + created_height + spent_height.
+/// Re-exported from `dig-clvm` (which re-exports from `chia-protocol`).
+pub use dig_clvm::CoinState;
+
+/// Filters for batch coin state queries (include_spent, include_unspent, include_hinted, min_amount).
+/// Used by `batch_coin_states_by_puzzle_hashes()` (QRY-007).
+/// Not re-exported by dig-clvm, so imported directly from chia-protocol.
+pub use chia_protocol::CoinStateFilters;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Top-level modules
+// ─────────────────────────────────────────────────────────────────────────────
+// Each module corresponds to one or more requirement domains in
+// docs/requirements/domains/. The module hierarchy is defined by STR-002.
+
+/// CoinStore struct — primary public API orchestration.
+/// See: docs/requirements/domains/crate_api/specs/API-001.md
+pub mod coin_store;
+
+/// Configuration types and constants.
+/// See: docs/requirements/domains/crate_api/specs/API-003.md
+pub mod config;
+
+/// Error types for all coinstore operations.
+/// See: docs/requirements/domains/crate_api/specs/API-004.md
+pub mod error;
+
+/// Domain types: CoinRecord, BlockData, CoinAddition, result structs, type aliases.
+/// See: docs/requirements/domains/crate_api/specs/API-002.md
+pub mod types;
+
+/// Block application pipeline (Phase 1 validation + Phase 2 mutation).
+/// See: docs/requirements/domains/block_application/specs/
+pub mod block_apply;
+
+/// Rollback pipeline for chain reorganization recovery.
+/// See: docs/requirements/domains/rollback/specs/
+pub mod rollback;
+
+/// All query method implementations on CoinStore.
+/// See: docs/requirements/domains/queries/specs/
+pub mod queries;
+
+/// Hint store for puzzle hash hints on coins.
+/// See: docs/requirements/domains/hints/specs/
+pub mod hints;
+
+/// Tiered spent coin archival (hot/archive/prune).
+/// See: docs/requirements/domains/performance/specs/PRF-005.md
+pub mod archive;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Subdirectory modules
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Storage backend abstraction (trait + RocksDB/LMDB implementations).
+/// Backend modules are feature-gated: `rocksdb-storage`, `lmdb-storage`.
+/// See: docs/requirements/domains/storage/specs/
+pub mod storage;
+
+/// Sparse Merkle tree for state root computation and proofs.
+/// See: docs/requirements/domains/merkle/specs/
+pub mod merkle;
+
+/// In-memory caching: unspent set, LRU cache, materialized counters.
+/// See: docs/requirements/domains/performance/specs/PRF-001..003.md
+pub mod cache;
+</file>
+
+<file path="merkle/mod.rs">
+//! Sparse Merkle tree for state root computation.
+//!
+//! Maintains a 256-level sparse Merkle tree over all coin records.
+//! The root hash is committed in every block header, enabling light
+//! client proofs and state verification.
+//!
+//! # Domain-separated hashing
+//!
+//! - **Leaf hash:** `SHA256(0x00 || value)` — the `0x00` prefix prevents
+//!   second-preimage attacks by distinguishing leaves from internal nodes.
+//! - **Node hash:** `SHA256(0x01 || left || right)` — the `0x01` prefix
+//!   distinguishes internal nodes from leaves.
+//!
+//! This convention matches the existing `l2_driver_state_channel` implementation
+//! (see `utils/hash.rs`: `merkle_leaf_hash`, `merkle_node_hash`).
+//!
+//! # Deferred root recomputation
+//!
+//! Mutation methods (`batch_insert`, `batch_update`, `batch_remove`) mark the
+//! tree as dirty but do NOT recompute the root. The root is recomputed lazily
+//! on the next call to `root()`. This ensures at most one expensive tree
+//! traversal per block, regardless of how many coins are modified.
+//!
+//! # Requirements: STR-004, MRK-001, MRK-002
+//! # Spec: docs/requirements/domains/merkle/specs/MRK-001.md
+//! # SPEC.md: Section 9 (Merkle Tree)
+
+pub mod persistent;
+pub mod proof;
+
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
+use chia_protocol::Bytes32;
+use chia_sha2::Sha256;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Height of the sparse Merkle tree: 256 levels for 256-bit (Bytes32) keys.
+///
+/// Each bit of a coin_id selects left (0) or right (1) at successive levels,
+/// from bit 0 (MSB, root level) to bit 255 (LSB, leaf level).
+pub const SMT_HEIGHT: usize = 256;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Domain-separated hashing
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Compute a leaf hash: `SHA256(0x00 || data)`.
+///
+/// The `0x00` domain separator prevents second-preimage attacks by ensuring
+/// leaf hashes cannot collide with internal node hashes.
+///
+/// Matches `l2_driver_state_channel/src/utils/hash.rs:merkle_leaf_hash`.
+#[inline]
+pub fn merkle_leaf_hash(data: &[u8]) -> Bytes32 {
+    let mut hasher = Sha256::new();
+    hasher.update([0x00]);
+    hasher.update(data);
+    let result = hasher.finalize();
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&result);
+    Bytes32::from(bytes)
+}
+
+/// Compute an internal node hash: `SHA256(0x01 || left || right)`.
+///
+/// The `0x01` domain separator distinguishes internal nodes from leaves.
+///
+/// Matches `l2_driver_state_channel/src/utils/hash.rs:merkle_node_hash`.
+#[inline]
+pub fn merkle_node_hash(left: &Bytes32, right: &Bytes32) -> Bytes32 {
+    let mut hasher = Sha256::new();
+    hasher.update([0x01]);
+    hasher.update(left.as_ref());
+    hasher.update(right.as_ref());
+    let result = hasher.finalize();
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&result);
+    Bytes32::from(bytes)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MRK-002: Memoized empty hashes
+// ─────────────────────────────────────────────────────────────────────────────
+// Pre-computed empty subtree hashes for all 257 levels (0..=256).
+// Level 0 = empty leaf hash, Level 256 = root of entirely empty 256-level tree.
+//
+// Requirement: MRK-002
+// Spec: docs/requirements/domains/merkle/specs/MRK-002.md
+
+/// Sentinel value for an empty leaf. All zeros, 32 bytes.
+const EMPTY_LEAF_SENTINEL: [u8; 32] = [0u8; 32];
+
+/// Pre-computed empty hashes for sparse Merkle tree levels 0..=256.
+///
+/// - `EMPTY_HASHES[0]` = `merkle_leaf_hash(EMPTY_LEAF_SENTINEL)` (empty leaf)
+/// - `EMPTY_HASHES[n]` = `merkle_node_hash(EMPTY_HASHES[n-1], EMPTY_HASHES[n-1])` for n > 0
+/// - `EMPTY_HASHES[256]` = root hash of an entirely empty 256-level tree
+///
+/// Initialized lazily via `OnceLock` on first access. All 257 values are
+/// computed bottom-up in a single pass. Thread-safe: concurrent first-access
+/// from multiple threads initializes exactly once.
+static EMPTY_HASHES: OnceLock<Vec<Bytes32>> = OnceLock::new();
+
+/// Get the pre-computed empty hash at the given tree level.
+///
+/// Level 0 = empty leaf hash.
+/// Level 256 = root of entirely empty tree.
+///
+/// # Panics
+///
+/// Panics if `level > SMT_HEIGHT` (256).
+///
+/// # Performance
+///
+/// O(1) — direct array index after one-time initialization.
+#[inline]
+pub fn empty_hash(level: usize) -> Bytes32 {
+    assert!(
+        level <= SMT_HEIGHT,
+        "level {} exceeds SMT_HEIGHT {}",
+        level,
+        SMT_HEIGHT
+    );
+    get_empty_hashes()[level]
+}
+
+/// Access the full pre-computed empty hash array.
+fn get_empty_hashes() -> &'static Vec<Bytes32> {
+    EMPTY_HASHES.get_or_init(|| {
+        let mut hashes = Vec::with_capacity(SMT_HEIGHT + 1);
+
+        // Level 0: empty leaf hash
+        hashes.push(merkle_leaf_hash(&EMPTY_LEAF_SENTINEL));
+
+        // Levels 1..256: each level is the node hash of two copies of the level below.
+        for _ in 1..=SMT_HEIGHT {
+            let child = *hashes.last().unwrap();
+            hashes.push(merkle_node_hash(&child, &child));
+        }
+
+        hashes
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MerkleError
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Errors from sparse Merkle tree operations.
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum MerkleError {
+    /// Attempted to insert a key that already exists in the tree.
+    #[error("key already exists: {0}")]
+    KeyAlreadyExists(Bytes32),
+
+    /// Attempted to update or remove a key that does not exist.
+    #[error("key not found: {0}")]
+    KeyNotFound(Bytes32),
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MRK-001: SparseMerkleTree
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A 256-level sparse Merkle tree for coin state commitment.
+///
+/// Leaves are keyed by `Bytes32` (coin IDs) and hold the leaf hash of the
+/// coin record. The tree uses deferred root recomputation: mutations mark
+/// the tree as dirty, and the root is only recomputed when `root()` is called.
+///
+/// # Design
+///
+/// The tree stores only non-empty leaves in a `HashMap`. Internal nodes are
+/// computed on-the-fly during root recomputation by recursively partitioning
+/// leaves by their key bits at each level. Empty subtrees are replaced with
+/// pre-computed empty hashes from [`empty_hash`] (MRK-002).
+///
+/// This is memory-efficient for sparse trees: a tree with 10M coins stores
+/// only 10M leaf entries, not 2^256 nodes.
+///
+/// # Requirements: MRK-001
+/// # Spec: docs/requirements/domains/merkle/specs/MRK-001.md
+/// # SPEC.md: Section 9 (Merkle Tree)
+///
+/// # Reference
+/// Derived from `l2_driver_state_channel/src/utils/merkle.rs:SparseMerkleTree`.
+#[derive(Debug, Clone)]
+pub struct SparseMerkleTree {
+    /// Non-empty leaf values: coin_id -> leaf_hash.
+    /// Only populated (non-empty) leaves are stored.
+    leaves: HashMap<Bytes32, Bytes32>,
+
+    /// Cached root hash. `None` when dirty (needs recomputation).
+    root_hash: Option<Bytes32>,
+}
+
+impl Default for SparseMerkleTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SparseMerkleTree {
+    /// Create a new empty sparse Merkle tree.
+    ///
+    /// The root of an empty tree is `empty_hash(SMT_HEIGHT)` — the pre-computed
+    /// root of a 256-level tree with all-empty leaves.
+    pub fn new() -> Self {
+        Self {
+            leaves: HashMap::new(),
+            root_hash: Some(empty_hash(SMT_HEIGHT)),
+        }
+    }
+
+    /// Insert new leaves into the tree. Does NOT recompute the root.
+    ///
+    /// Each entry is `(coin_id, leaf_hash)`. Inserting a key that already
+    /// exists returns `MerkleError::KeyAlreadyExists`.
+    ///
+    /// Call `root()` after all mutations to get the updated root hash.
+    ///
+    /// # Requirement: MRK-001
+    pub fn batch_insert(&mut self, entries: &[(Bytes32, Bytes32)]) -> Result<(), MerkleError> {
+        for (key, _) in entries {
+            if self.leaves.contains_key(key) {
+                return Err(MerkleError::KeyAlreadyExists(*key));
+            }
+        }
+        for (key, value) in entries {
+            self.leaves.insert(*key, *value);
+        }
+        if !entries.is_empty() {
+            self.root_hash = None; // Mark dirty
+        }
+        Ok(())
+    }
+
+    /// Update existing leaves with new values. Does NOT recompute the root.
+    ///
+    /// Updating a key that does not exist returns `MerkleError::KeyNotFound`.
+    ///
+    /// # Requirement: MRK-001
+    pub fn batch_update(&mut self, entries: &[(Bytes32, Bytes32)]) -> Result<(), MerkleError> {
+        for (key, _) in entries {
+            if !self.leaves.contains_key(key) {
+                return Err(MerkleError::KeyNotFound(*key));
+            }
+        }
+        for (key, value) in entries {
+            self.leaves.insert(*key, *value);
+        }
+        if !entries.is_empty() {
+            self.root_hash = None; // Mark dirty
+        }
+        Ok(())
+    }
+
+    /// Remove leaves from the tree. Does NOT recompute the root.
+    ///
+    /// Removing a key that does not exist returns `MerkleError::KeyNotFound`.
+    ///
+    /// # Requirement: MRK-001
+    pub fn batch_remove(&mut self, keys: &[Bytes32]) -> Result<(), MerkleError> {
+        for key in keys {
+            if !self.leaves.contains_key(key) {
+                return Err(MerkleError::KeyNotFound(*key));
+            }
+        }
+        for key in keys {
+            self.leaves.remove(key);
+        }
+        if !keys.is_empty() {
+            self.root_hash = None; // Mark dirty
+        }
+        Ok(())
+    }
+
+    /// Return the current Merkle root, recomputing if dirty.
+    ///
+    /// After this call, the tree is no longer dirty. Subsequent calls
+    /// without intervening mutations return the cached root in O(1).
+    ///
+    /// # Algorithm
+    ///
+    /// Recursively partitions leaves by their key bits at each tree level.
+    /// At each level, bit `depth` of the key determines left (0) or right (1).
+    /// Empty subtrees are replaced with pre-computed `empty_hash(height)`.
+    ///
+    /// # Requirement: MRK-001
+    pub fn root(&mut self) -> Bytes32 {
+        if let Some(cached) = self.root_hash {
+            return cached;
+        }
+
+        // Recompute from leaves.
+        let leaf_refs: Vec<(&Bytes32, &Bytes32)> = self.leaves.iter().collect();
+        let root = Self::compute_subtree_hash(&leaf_refs, 0);
+        self.root_hash = Some(root);
+        root
+    }
+
+    /// Check if the tree has been modified since the last `root()` call.
+    pub fn is_dirty(&self) -> bool {
+        self.root_hash.is_none() && !self.leaves.is_empty()
+    }
+
+    /// Number of non-empty leaves in the tree.
+    pub fn len(&self) -> usize {
+        self.leaves.len()
+    }
+
+    /// Whether the tree has no leaves.
+    pub fn is_empty(&self) -> bool {
+        self.leaves.is_empty()
+    }
+
+    /// Check if a key exists in the tree.
+    pub fn contains_key(&self, key: &Bytes32) -> bool {
+        self.leaves.contains_key(key)
+    }
+
+    /// Get the leaf hash for a key, if it exists.
+    pub fn get(&self, key: &Bytes32) -> Option<&Bytes32> {
+        self.leaves.get(key)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Internal: recursive subtree hash computation
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// Recursively compute the hash of a subtree at the given depth.
+    ///
+    /// `depth` ranges from 0 (root level) to SMT_HEIGHT (leaf level).
+    /// At depth == SMT_HEIGHT, we're at the leaf level.
+    fn compute_subtree_hash(leaves: &[(&Bytes32, &Bytes32)], depth: usize) -> Bytes32 {
+        // Base case: no leaves in this subtree → empty subtree hash.
+        if leaves.is_empty() {
+            return empty_hash(SMT_HEIGHT - depth);
+        }
+
+        // Base case: at leaf level (depth 256).
+        if depth == SMT_HEIGHT {
+            // There should be exactly one leaf at this position.
+            // Return its pre-computed leaf hash (the value stored is already
+            // the leaf hash, not the raw record).
+            return leaves[0].1.to_owned();
+        }
+
+        // Partition leaves by bit `depth` of their key.
+        // Bit 0 = MSB of the first byte.
+        let (left, right): (Vec<_>, Vec<_>) = leaves
+            .iter()
+            .partition(|(key, _)| !Self::get_bit(key, depth));
+
+        let left_hash = Self::compute_subtree_hash(&left, depth + 1);
+        let right_hash = Self::compute_subtree_hash(&right, depth + 1);
+
+        merkle_node_hash(&left_hash, &right_hash)
+    }
+
+    /// Get bit `n` of a Bytes32 key (MSB-first ordering).
+    ///
+    /// Bit 0 = MSB of byte 0 (root level decision).
+    /// Bit 255 = LSB of byte 31 (leaf level decision).
+    #[inline]
+    fn get_bit(key: &Bytes32, n: usize) -> bool {
+        let byte_index = n / 8;
+        let bit_index = 7 - (n % 8); // MSB-first within each byte
+        (key.as_ref()[byte_index] >> bit_index) & 1 == 1
+    }
+}
+</file>
+
+<file path="merkle/persistent.rs">
+//! Persistent Merkle tree node storage.
+//!
+//! Stores internal tree nodes in the `merkle_nodes` column family with
+//! dirty node tracking and incremental flush. On startup, only the root
+//! node is loaded; internal nodes are demand-loaded during proof generation.
+//!
+//! # Requirements: MRK-003
+//! # Spec: docs/requirements/domains/merkle/specs/MRK-003.md
+//! # SPEC.md: Section 13.4 (Persistent Merkle Tree)
+//!
+//! TODO: Full implementation in MRK-003 (Phase 3). The current SparseMerkleTree
+//! in mod.rs works in-memory. MRK-003 will add persistent node storage so the
+//! tree survives restarts without full reconstruction.
+</file>
+
+<file path="merkle/proof.rs">
+//! Merkle proof generation and verification.
+//!
+//! [`SparseMerkleProof`] contains sibling hashes along a 256-level path.
+//! Supports both inclusion proofs (coin exists with a specific value) and
+//! non-inclusion proofs (coin does not exist in the tree).
+//!
+//! # Verification
+//!
+//! `verify()` is a **static method** — it requires no tree state. A light
+//! client can verify a proof against any trusted state root using only the
+//! proof data, the key, and the claimed value (or None for exclusion).
+//!
+//! # Requirements: MRK-004, MRK-005
+//! # Spec: docs/requirements/domains/merkle/specs/MRK-004.md
+
+use chia_protocol::Bytes32;
+use serde::{Deserialize, Serialize};
+
+use super::{empty_hash, merkle_node_hash, SparseMerkleTree, SMT_HEIGHT};
+
+/// A proof of inclusion or exclusion in the sparse Merkle tree.
+///
+/// Contains the 256 sibling hashes along the path from the leaf to the root.
+/// For an inclusion proof, `value` is `Some(leaf_hash)`. For an exclusion
+/// proof, `value` is `None` (the leaf at this position is empty).
+///
+/// # Verification
+///
+/// Given a trusted root hash, call `SparseMerkleProof::verify()` to check
+/// whether the proof is consistent with that root.
+///
+/// # Size
+///
+/// A proof is exactly 256 * 32 = 8,192 bytes of sibling hashes, plus the
+/// key (32 bytes), optional value (32 bytes), and a small header.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SparseMerkleProof {
+    /// The key (coin_id) this proof is for.
+    pub key: Bytes32,
+    /// The leaf value if the key exists (inclusion proof), or None (exclusion proof).
+    pub value: Option<Bytes32>,
+    /// Sibling hashes along the path from leaf to root.
+    /// `siblings[0]` is the sibling at depth 0 (root level).
+    /// `siblings[255]` is the sibling at depth 255 (leaf level).
+    pub siblings: Vec<Bytes32>,
+}
+
+impl SparseMerkleProof {
+    /// Verify this proof against an expected root hash.
+    ///
+    /// Returns `true` if the proof is consistent with the given root.
+    /// This is a **static computation** — no tree state is needed.
+    ///
+    /// For inclusion proofs (`value = Some(leaf_hash)`): verifies the key
+    /// exists with the claimed value.
+    /// For exclusion proofs (`value = None`): verifies the key does not exist.
+    ///
+    /// # Algorithm
+    ///
+    /// Starts at the leaf level (depth 255) with either the claimed leaf hash
+    /// or the empty leaf hash. Walks up to the root, combining with sibling
+    /// hashes at each level. The key bits determine whether we're the left
+    /// or right child at each level.
+    ///
+    /// # Requirement: MRK-005
+    pub fn verify(&self, expected_root: &Bytes32) -> bool {
+        if self.siblings.len() != SMT_HEIGHT {
+            return false;
+        }
+
+        // Start with the leaf hash at depth 256.
+        let leaf_hash = match &self.value {
+            Some(value) => *value, // The stored value IS the leaf hash
+            None => empty_hash(0), // Empty leaf → empty leaf hash
+        };
+
+        // Walk from leaf (depth 255) to root (depth 0), combining with siblings.
+        let mut current = leaf_hash;
+        for depth in (0..SMT_HEIGHT).rev() {
+            let bit = SparseMerkleTree::get_bit_public(&self.key, depth);
+            let sibling = &self.siblings[depth];
+
+            current = if bit {
+                // This node is on the right; sibling is on the left.
+                merkle_node_hash(sibling, &current)
+            } else {
+                // This node is on the left; sibling is on the right.
+                merkle_node_hash(&current, sibling)
+            };
+        }
+
+        current == *expected_root
+    }
+}
+
+// Add a public accessor for get_bit so proofs can use it.
+impl SparseMerkleTree {
+    /// Public accessor for bit extraction (used by proof verification).
+    ///
+    /// Bit 0 = MSB of byte 0 (root level).
+    /// Bit 255 = LSB of byte 31 (leaf level).
+    #[inline]
+    pub fn get_bit_public(key: &Bytes32, n: usize) -> bool {
+        Self::get_bit(key, n)
+    }
+
+    /// Generate a proof for a key (inclusion or exclusion).
+    ///
+    /// If the key exists in the tree, generates an inclusion proof.
+    /// If the key does not exist, generates an exclusion proof (value = None).
+    ///
+    /// # Requirement: MRK-004
+    pub fn get_proof(&self, key: &Bytes32) -> SparseMerkleProof {
+        let mut siblings = Vec::with_capacity(SMT_HEIGHT);
+        let leaf_refs: Vec<(&Bytes32, &Bytes32)> = self.leaves.iter().collect();
+        let mut current_leaves = leaf_refs;
+
+        for depth in 0..SMT_HEIGHT {
+            let bit = Self::get_bit(key, depth);
+
+            // Partition leaves by their bit at this depth.
+            let (left_leaves, right_leaves): (Vec<_>, Vec<_>) = current_leaves
+                .into_iter()
+                .partition(|(k, _)| !Self::get_bit(k, depth));
+
+            // The sibling is the subtree we're NOT descending into.
+            let sibling_leaves = if bit { &left_leaves } else { &right_leaves };
+            let sibling_hash = Self::compute_subtree_hash(sibling_leaves, depth + 1);
+            siblings.push(sibling_hash);
+
+            // Continue down the path.
+            current_leaves = if bit { right_leaves } else { left_leaves };
+        }
+
+        SparseMerkleProof {
+            key: *key,
+            value: self.leaves.get(key).copied(),
+            siblings,
+        }
+    }
+}
+</file>
+
+<file path="queries.rs">
+//! Query method implementations for dig-coinstore.
+//!
+//! All coin state query methods on [`CoinStore`]: by ID, puzzle hash, height,
+//! parent, hint, batch pagination, singleton lineage, and aggregates.
+//!
+//! # Requirements: QRY-001 through QRY-011
+//! # Spec: docs/requirements/domains/queries/specs/
+//! # SPEC.md: Section 3 (Public API, query methods 3.4-3.14)
+//! # Chia reference: coin_store.py, coin_store_protocol.py
+</file>
+
+<file path="rollback.rs">
+//! Rollback pipeline for chain reorganization recovery.
+//!
+//! Implements `rollback_to_block()` and `rollback_n_blocks()` on [`CoinStore`]:
+//! coin deletion, un-spending, FF-eligible recomputation, hint cleanup,
+//! Merkle rebuild, and atomic state revert.
+//!
+//! # Requirements: RBK-001 through RBK-007
+//! # Spec: docs/requirements/domains/rollback/specs/
+//! # SPEC.md: Section 6 (Rollback Pipeline)
+//! # Chia reference: coin_store.py:561-624
+</file>
+
+<file path="storage/lmdb.rs">
+//! LMDB storage backend implementation (placeholder).
+//!
+//! Will implement [`StorageBackend`] using LMDB (via heed bindings) with
+//! memory-mapped I/O, MVCC concurrency, and named databases.
+//!
+//! # Requirements: STO-003
+//! # Spec: docs/requirements/domains/storage/specs/STO-003.md
+//! # SPEC.md: Section 7.3 (LMDB Database Layout)
+//!
+//! TODO: Full implementation in STO-003. This placeholder ensures the module
+//! compiles when `lmdb-storage` feature is enabled.
+</file>
+
+<file path="storage/mod.rs">
+//! Storage backend abstraction for dig-coinstore.
+//!
+//! Defines the [`StorageBackend`] trait that abstracts over LMDB and RocksDB.
+//! Both backends implement this trait, and the rest of the crate interacts
+//! with storage exclusively through this interface.
+//!
+//! Backend selection is compile-time via Cargo feature gates:
+//! - `rocksdb-storage` → [`rocksdb`] module
+//! - `lmdb-storage` → [`lmdb`] module
+//!
+//! # Design rationale
+//!
+//! The trait uses `&str` for column family names (matching the string constants
+//! in [`schema`]) and `&[u8]` / `Vec<u8>` for keys and values. This avoids
+//! generic type parameters that would complicate dynamic dispatch while keeping
+//! the API flexible enough for any key encoding scheme.
+//!
+//! # Requirements: STR-003, STO-001
+//! # Spec: docs/requirements/domains/storage/specs/STO-001.md
+//! # SPEC.md: Section 7 (Storage Architecture)
+
+#[cfg(feature = "rocksdb-storage")]
+pub mod rocksdb;
+
+#[cfg(feature = "lmdb-storage")]
+pub mod lmdb;
+
+pub mod schema;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StorageError
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Errors from storage backend operations.
+///
+/// This is a low-level error type used by [`StorageBackend`] implementations.
+/// Higher-level code wraps this into `CoinStoreError::StorageError`.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum StorageError {
+    /// The specified column family does not exist.
+    #[error("unknown column family: {0}")]
+    UnknownColumnFamily(String),
+
+    /// A database I/O or internal error.
+    #[error("backend error: {0}")]
+    BackendError(String),
+
+    /// Serialization or deserialization failure.
+    #[error("serialization error: {0}")]
+    SerializationError(String),
+}
+
+/// A key-value pair returned from prefix scans.
+pub type KvPair = (Vec<u8>, Vec<u8>);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WriteBatch
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A single operation within a [`WriteBatch`].
+///
+/// Operations are accumulated in memory and then committed atomically
+/// via [`StorageBackend::batch_write`].
+#[derive(Debug, Clone)]
+pub enum WriteOp {
+    /// Insert or update a key-value pair.
+    Put {
+        cf: String,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    },
+    /// Delete a key.
+    Delete { cf: String, key: Vec<u8> },
+}
+
+/// An atomic batch of write operations.
+///
+/// Accumulates [`WriteOp`]s in memory, then commits them all at once
+/// via [`StorageBackend::batch_write`]. This ensures either all writes
+/// succeed or none do (atomicity).
+///
+/// # Usage
+///
+/// ```ignore
+/// let mut batch = WriteBatch::new();
+/// batch.put("coin_records", &coin_key, &serialized_record);
+/// batch.put("coin_by_puzzle_hash", &ph_key, &coin_id);
+/// batch.delete("unspent_by_puzzle_hash", &old_ph_key);
+/// backend.batch_write(batch)?;
+/// ```
+///
+/// # Requirement: STO-005
+/// # Spec: docs/requirements/domains/storage/specs/STO-005.md
+#[derive(Debug, Clone, Default)]
+pub struct WriteBatch {
+    /// The accumulated write operations.
+    pub ops: Vec<WriteOp>,
+}
+
+impl WriteBatch {
+    /// Create an empty write batch.
+    pub fn new() -> Self {
+        Self { ops: Vec::new() }
+    }
+
+    /// Create a write batch with pre-allocated capacity.
+    ///
+    /// Use when the number of operations is known in advance (e.g.,
+    /// block application knows additions.len() + removals.len()).
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            ops: Vec::with_capacity(capacity),
+        }
+    }
+
+    /// Add a put (insert/update) operation.
+    pub fn put(&mut self, cf: &str, key: &[u8], value: &[u8]) {
+        self.ops.push(WriteOp::Put {
+            cf: cf.to_string(),
+            key: key.to_vec(),
+            value: value.to_vec(),
+        });
+    }
+
+    /// Add a delete operation.
+    pub fn delete(&mut self, cf: &str, key: &[u8]) {
+        self.ops.push(WriteOp::Delete {
+            cf: cf.to_string(),
+            key: key.to_vec(),
+        });
+    }
+
+    /// Number of operations in this batch.
+    pub fn len(&self) -> usize {
+        self.ops.len()
+    }
+
+    /// Whether this batch is empty.
+    pub fn is_empty(&self) -> bool {
+        self.ops.is_empty()
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StorageBackend trait
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Trait abstracting over key-value storage backends (RocksDB, LMDB).
+///
+/// All storage access in dig-coinstore goes through this trait. Concrete
+/// implementations are selected at compile time via feature gates.
+///
+/// # Thread safety
+///
+/// Implementations MUST be `Send + Sync` to support concurrent access
+/// from the CoinStore's RwLock-protected methods (CON-001, CON-002).
+///
+/// # Column families
+///
+/// The `cf` parameter in each method refers to a column family name from
+/// [`schema`]. Invalid CF names should return `StorageError::UnknownColumnFamily`.
+///
+/// # Requirement: STO-001
+/// # Spec: docs/requirements/domains/storage/specs/STO-001.md
+pub trait StorageBackend: Send + Sync {
+    /// Retrieve a value by column family and key.
+    ///
+    /// Returns `Ok(None)` if the key does not exist (not an error).
+    /// Returns `Err` only on I/O or backend failures.
+    fn get(&self, cf: &str, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError>;
+
+    /// Insert or update a key-value pair in the specified column family.
+    fn put(&self, cf: &str, key: &[u8], value: &[u8]) -> Result<(), StorageError>;
+
+    /// Remove a key from the specified column family.
+    ///
+    /// Idempotent: no error if the key does not exist.
+    fn delete(&self, cf: &str, key: &[u8]) -> Result<(), StorageError>;
+
+    /// Atomically apply all operations in a [`WriteBatch`].
+    ///
+    /// Either all operations succeed or none do. This is the primary
+    /// mechanism for atomic block application (BLK-014, STO-005).
+    ///
+    /// An empty batch is a no-op (no error).
+    fn batch_write(&self, batch: WriteBatch) -> Result<(), StorageError>;
+
+    /// Return all key-value pairs where the key starts with `prefix`.
+    ///
+    /// Results are ordered by key (lexicographic). Used for puzzle hash
+    /// lookups, height range scans, and hint queries.
+    ///
+    /// An empty prefix returns all entries in the column family (expensive).
+    fn prefix_scan(&self, cf: &str, prefix: &[u8]) -> Result<Vec<KvPair>, StorageError>;
+
+    /// Force WAL and memtable flush to persistent storage.
+    fn flush(&self) -> Result<(), StorageError>;
+
+    /// Trigger compaction on the specified column family.
+    fn compact(&self, cf: &str) -> Result<(), StorageError>;
+}
+</file>
+
+<file path="storage/rocksdb.rs">
+//! RocksDB storage backend implementation.
+//!
+//! Implements [`StorageBackend`] using RocksDB with column families for each
+//! index type. Column families are created on first open based on the names
+//! defined in [`super::schema`].
+//!
+//! # Requirements: STR-003, STO-002, STO-005
+//! # Spec: docs/requirements/domains/storage/specs/STO-002.md
+//! # SPEC.md: Section 7.2 (RocksDB Column Families)
+//!
+//! # Chia comparison
+//! Chia uses SQLite with indices for coin lookups. RocksDB provides better
+//! write throughput (LSM tree) and bloom filter support for negative lookups.
+
+use std::path::Path;
+use std::sync::Arc;
+
+use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, WriteBatch as RocksWriteBatch, DB};
+
+use super::schema::ALL_COLUMN_FAMILIES;
+use super::{StorageBackend, StorageError, WriteBatch, WriteOp};
+
+/// RocksDB-backed storage for dig-coinstore.
+///
+/// Wraps a `rocksdb::DB` instance with pre-created column families matching
+/// the schema defined in [`super::schema`]. Thread-safe via `Arc<DB>` —
+/// RocksDB handles internal locking for concurrent reads and writes.
+///
+/// # Column families
+///
+/// All 12 column families from SPEC Section 7.2 are created on open:
+/// `coin_records`, `coin_by_puzzle_hash`, `unspent_by_puzzle_hash`,
+/// `coin_by_parent`, `coin_by_confirmed_height`, `coin_by_spent_height`,
+/// `hints`, `hints_by_value`, `merkle_nodes`, `archive_coin_records`,
+/// `state_snapshots`, `metadata`.
+pub struct RocksDbBackend {
+    db: Arc<DB>,
+}
+
+impl RocksDbBackend {
+    /// Open (or create) a RocksDB database at the given path.
+    ///
+    /// Creates all column families defined in [`ALL_COLUMN_FAMILIES`] if they
+    /// don't already exist. Uses default RocksDB options — bloom filter and
+    /// compaction tuning will be added in STO-004 and STO-006.
+    ///
+    /// # Errors
+    ///
+    /// Returns `StorageError::BackendError` if the database cannot be opened
+    /// (e.g., path doesn't exist and can't be created, lock file conflict).
+    pub fn open(path: &Path) -> Result<Self, StorageError> {
+        let mut opts = Options::default();
+        opts.create_if_missing(true);
+        opts.create_missing_column_families(true);
+
+        // Create column family descriptors with default options.
+        // STO-004 and STO-006 will add per-CF bloom filter and compaction config.
+        let cf_descriptors: Vec<ColumnFamilyDescriptor> = ALL_COLUMN_FAMILIES
+            .iter()
+            .map(|name| ColumnFamilyDescriptor::new(*name, Options::default()))
+            .collect();
+
+        let db = DB::open_cf_descriptors(&opts, path, cf_descriptors)
+            .map_err(|e| StorageError::BackendError(format!("Failed to open RocksDB: {}", e)))?;
+
+        Ok(Self { db: Arc::new(db) })
+    }
+
+    /// Get a reference to the column family handle, or return an error if unknown.
+    fn cf_handle(&self, cf: &str) -> Result<&rocksdb::ColumnFamily, StorageError> {
+        self.db
+            .cf_handle(cf)
+            .ok_or_else(|| StorageError::UnknownColumnFamily(cf.to_string()))
+    }
+}
+
+impl StorageBackend for RocksDbBackend {
+    fn get(&self, cf: &str, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
+        let cf_handle = self.cf_handle(cf)?;
+        self.db
+            .get_cf(cf_handle, key)
+            .map_err(|e| StorageError::BackendError(format!("RocksDB get error: {}", e)))
+    }
+
+    fn put(&self, cf: &str, key: &[u8], value: &[u8]) -> Result<(), StorageError> {
+        let cf_handle = self.cf_handle(cf)?;
+        self.db
+            .put_cf(cf_handle, key, value)
+            .map_err(|e| StorageError::BackendError(format!("RocksDB put error: {}", e)))
+    }
+
+    fn delete(&self, cf: &str, key: &[u8]) -> Result<(), StorageError> {
+        let cf_handle = self.cf_handle(cf)?;
+        self.db
+            .delete_cf(cf_handle, key)
+            .map_err(|e| StorageError::BackendError(format!("RocksDB delete error: {}", e)))
+    }
+
+    /// Atomically apply all operations in the batch.
+    ///
+    /// Uses RocksDB's native `WriteBatch` for a single WAL fsync.
+    /// This is the primary performance optimization for block application
+    /// (STO-005): a block with 1000 coins generates ~5000 write ops, all
+    /// committed in one atomic batch instead of individual puts.
+    fn batch_write(&self, batch: WriteBatch) -> Result<(), StorageError> {
+        if batch.is_empty() {
+            return Ok(());
+        }
+
+        let mut rocks_batch = RocksWriteBatch::default();
+
+        for op in &batch.ops {
+            match op {
+                WriteOp::Put { cf, key, value } => {
+                    let cf_handle = self.cf_handle(cf)?;
+                    rocks_batch.put_cf(cf_handle, key, value);
+                }
+                WriteOp::Delete { cf, key } => {
+                    let cf_handle = self.cf_handle(cf)?;
+                    rocks_batch.delete_cf(cf_handle, key);
+                }
+            }
+        }
+
+        self.db
+            .write(rocks_batch)
+            .map_err(|e| StorageError::BackendError(format!("RocksDB batch write error: {}", e)))
+    }
+
+    /// Prefix scan: return all KV pairs where key starts with `prefix`.
+    ///
+    /// Uses RocksDB's prefix iterator. Results are in key order.
+    /// The scan terminates when keys no longer match the prefix.
+    fn prefix_scan(&self, cf: &str, prefix: &[u8]) -> Result<Vec<super::KvPair>, StorageError> {
+        let cf_handle = self.cf_handle(cf)?;
+        let iter = self.db.iterator_cf(
+            cf_handle,
+            IteratorMode::From(prefix, rocksdb::Direction::Forward),
+        );
+
+        let mut results = Vec::new();
+        for item in iter {
+            let (key, value) =
+                item.map_err(|e| StorageError::BackendError(format!("Iterator error: {}", e)))?;
+
+            // Stop when keys no longer start with the prefix.
+            if !key.starts_with(prefix) {
+                break;
+            }
+
+            results.push((key.to_vec(), value.to_vec()));
+        }
+
+        Ok(results)
+    }
+
+    fn flush(&self) -> Result<(), StorageError> {
+        self.db
+            .flush()
+            .map_err(|e| StorageError::BackendError(format!("RocksDB flush error: {}", e)))
+    }
+
+    fn compact(&self, cf: &str) -> Result<(), StorageError> {
+        let cf_handle = self.cf_handle(cf)?;
+        self.db
+            .compact_range_cf(cf_handle, None::<&[u8]>, None::<&[u8]>);
+        Ok(())
+    }
+}
+</file>
+
+<file path="storage/schema.rs">
+//! Column family names and key encoding/decoding helpers.
+//!
+//! Defines the storage schema: column family name constants and composite key
+//! construction functions used by both RocksDB and LMDB backends.
+//!
+//! All key formats use **big-endian** encoding for heights/integers so that
+//! lexicographic byte comparison matches numeric order. This is critical for
+//! range scans in ordered key-value stores.
+//!
+//! # Requirement: STO-002, STO-008
+//! # Spec: docs/requirements/domains/storage/specs/STO-008.md
+//! # SPEC.md: Section 7.2 (column family key/value table)
+
+use chia_protocol::Bytes32;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Column family name constants
+// ─────────────────────────────────────────────────────────────────────────────
+// These names are used by both RocksDB (as column families) and LMDB (as
+// named databases). The 12 CFs mirror the SPEC Section 7.2 table exactly.
+//
+// Requirement: STO-002 (RocksDB), STO-003 (LMDB)
+
+/// Primary coin record storage. Key: coin_id (32 bytes). Value: bincode CoinRecord.
+pub const CF_COIN_RECORDS: &str = "coin_records";
+
+/// All coins indexed by puzzle hash. Key: puzzle_hash + coin_id (64 bytes). Value: coin_id.
+pub const CF_COIN_BY_PUZZLE_HASH: &str = "coin_by_puzzle_hash";
+
+/// Unspent-only coins by puzzle hash. Key: puzzle_hash + coin_id (64 bytes). Value: empty.
+/// Much smaller than the full index — only contains currently-unspent coins.
+/// Requirement: PRF-004
+pub const CF_UNSPENT_BY_PUZZLE_HASH: &str = "unspent_by_puzzle_hash";
+
+/// Coins indexed by parent coin info. Key: parent_id + coin_id (64 bytes). Value: coin_id.
+pub const CF_COIN_BY_PARENT: &str = "coin_by_parent";
+
+/// Coins indexed by confirmed (creation) height. Key: height_BE + coin_id (40 bytes). Value: coin_id.
+/// Used for `get_coins_added_at_height()` and rollback coin deletion.
+pub const CF_COIN_BY_CONFIRMED_HEIGHT: &str = "coin_by_confirmed_height";
+
+/// Coins indexed by spent height. Key: height_BE + coin_id (40 bytes). Value: coin_id.
+/// Used for `get_coins_removed_at_height()` and rollback un-spending.
+pub const CF_COIN_BY_SPENT_HEIGHT: &str = "coin_by_spent_height";
+
+/// Hints forward index. Key: coin_id + hint (up to 64 bytes). Value: empty.
+/// Used to look up which hints a coin has.
+pub const CF_HINTS: &str = "hints";
+
+/// Hints reverse index. Key: hint + coin_id (up to 64 bytes). Value: empty.
+/// Used to look up which coins have a given hint.
+pub const CF_HINTS_BY_VALUE: &str = "hints_by_value";
+
+/// Persistent Merkle tree internal nodes. Key: level(1) + path(32) = 33 bytes. Value: hash(32).
+pub const CF_MERKLE_NODES: &str = "merkle_nodes";
+
+/// Archived spent coin records (beyond rollback window). Key: coin_id (32). Value: bincode CoinRecord.
+/// Requirement: PRF-005
+pub const CF_ARCHIVE_COIN_RECORDS: &str = "archive_coin_records";
+
+/// State snapshots keyed by height. Key: height_BE (8 bytes). Value: serialized snapshot.
+pub const CF_STATE_SNAPSHOTS: &str = "state_snapshots";
+
+/// Chain metadata (tip, config, materialized counters). Key: string. Value: bytes.
+pub const CF_METADATA: &str = "metadata";
+
+/// All column family names as a slice, useful for bulk creation during DB initialization.
+pub const ALL_COLUMN_FAMILIES: &[&str] = &[
+    CF_COIN_RECORDS,
+    CF_COIN_BY_PUZZLE_HASH,
+    CF_UNSPENT_BY_PUZZLE_HASH,
+    CF_COIN_BY_PARENT,
+    CF_COIN_BY_CONFIRMED_HEIGHT,
+    CF_COIN_BY_SPENT_HEIGHT,
+    CF_HINTS,
+    CF_HINTS_BY_VALUE,
+    CF_MERKLE_NODES,
+    CF_ARCHIVE_COIN_RECORDS,
+    CF_STATE_SNAPSHOTS,
+    CF_METADATA,
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Key encoding helpers
+// ─────────────────────────────────────────────────────────────────────────────
+// All composite keys use fixed-width, big-endian encoding so that byte-level
+// lexicographic comparison matches semantic ordering (heights sort numerically,
+// prefix scans work on the first component).
+
+/// Encode a coin_id as a 32-byte key (identity — coin_id is already 32 bytes).
+///
+/// Used for: `coin_records`, `archive_coin_records`.
+#[inline]
+pub fn coin_key(coin_id: &Bytes32) -> [u8; 32] {
+    let mut key = [0u8; 32];
+    key.copy_from_slice(coin_id.as_ref());
+    key
+}
+
+/// Decode a 32-byte key back to a coin_id.
+#[inline]
+pub fn coin_id_from_key(key: &[u8]) -> Bytes32 {
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&key[..32]);
+    Bytes32::from(bytes)
+}
+
+/// Encode puzzle_hash + coin_id as a 64-byte composite key.
+///
+/// Used for: `coin_by_puzzle_hash`, `unspent_by_puzzle_hash`.
+/// The puzzle_hash prefix enables prefix scans for all coins with a given puzzle hash.
+#[inline]
+pub fn puzzle_hash_coin_key(puzzle_hash: &Bytes32, coin_id: &Bytes32) -> [u8; 64] {
+    let mut key = [0u8; 64];
+    key[..32].copy_from_slice(puzzle_hash.as_ref());
+    key[32..].copy_from_slice(coin_id.as_ref());
+    key
+}
+
+/// Extract the puzzle_hash (first 32 bytes) from a composite key.
+#[inline]
+pub fn puzzle_hash_from_key(key: &[u8]) -> Bytes32 {
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&key[..32]);
+    Bytes32::from(bytes)
+}
+
+/// Encode parent_coin_info + coin_id as a 64-byte composite key.
+///
+/// Used for: `coin_by_parent`.
+#[inline]
+pub fn parent_coin_key(parent_id: &Bytes32, coin_id: &Bytes32) -> [u8; 64] {
+    let mut key = [0u8; 64];
+    key[..32].copy_from_slice(parent_id.as_ref());
+    key[32..].copy_from_slice(coin_id.as_ref());
+    key
+}
+
+/// Encode height (u64 big-endian) + coin_id as a 40-byte composite key.
+///
+/// Big-endian ensures lexicographic sort matches numeric order.
+/// Used for: `coin_by_confirmed_height`, `coin_by_spent_height`.
+#[inline]
+pub fn height_coin_key(height: u64, coin_id: &Bytes32) -> [u8; 40] {
+    let mut key = [0u8; 40];
+    key[..8].copy_from_slice(&height.to_be_bytes());
+    key[8..].copy_from_slice(coin_id.as_ref());
+    key
+}
+
+/// Decode a height + coin_id composite key.
+#[inline]
+pub fn height_coin_from_key(key: &[u8]) -> (u64, Bytes32) {
+    let height = u64::from_be_bytes(key[..8].try_into().expect("key must be >= 8 bytes"));
+    let mut coin_bytes = [0u8; 32];
+    coin_bytes.copy_from_slice(&key[8..40]);
+    (height, Bytes32::from(coin_bytes))
+}
+
+/// Encode a height as an 8-byte big-endian key.
+///
+/// Used for: `state_snapshots`.
+#[inline]
+pub fn snapshot_key(height: u64) -> [u8; 8] {
+    height.to_be_bytes()
+}
+
+/// Decode a snapshot key back to a height.
+#[inline]
+pub fn height_from_snapshot_key(key: &[u8]) -> u64 {
+    u64::from_be_bytes(key[..8].try_into().expect("key must be 8 bytes"))
+}
+</file>
+
+<file path="types.rs">
+//! Domain types for dig-coinstore.
+//!
+//! Core data structures: [`CoinRecord`], [`BlockData`], [`CoinAddition`],
+//! [`ApplyBlockResult`], [`RollbackResult`], [`CoinStoreStats`],
+//! [`CoinStoreSnapshot`], [`UnspentLineageInfo`].
+//!
+//! Also defines type aliases: `CoinId = Bytes32`, `PuzzleHash = Bytes32`.
+//!
+//! # Requirements: API-002, API-005, API-006, API-007, API-008, API-009
+//! # Spec: docs/requirements/domains/crate_api/specs/
+</file>
+
+</files>

@@ -53,11 +53,11 @@ items:
 
   - id: QRY-007
     section: "Batch Coin State Pagination"
-    summary: "batch_coin_states_by_puzzle_hashes() with batch limit, hinted join, dedup, min_amount, deterministic sort, block boundary preservation, pagination"
+    summary: "batch_coin_states_by_puzzle_hashes() with CoinStateFilters from chia-protocol, batch limit, hinted join, dedup, min_amount, deterministic sort, block boundary preservation, pagination"
     status: gap
     spec_ref: "docs/requirements/domains/queries/specs/QRY-007.md"
     tests: []
-    notes: ""
+    notes: "Uses chia_protocol::CoinStateFilters struct instead of separate filter parameters for wire-level compatibility"
 
   - id: QRY-008
     section: "Singleton Lineage"
