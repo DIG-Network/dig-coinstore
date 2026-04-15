@@ -226,14 +226,12 @@ fn vv_req_api_006_coin_store_rollback_to_block_result_type() {
     // Height is 0 after empty genesis; target 0 is not strictly above tip, so the RBK stub path
     // still returns `StorageError`. (Target > tip is [`CoinStoreError::RollbackAboveTip`] — API-010,
     // `tests/api_010_tests.rs`.)
+    // Rolling back to height 0 when already at height 0 → no-op (RBK-001).
     let out: Result<RollbackResult, CoinStoreError> = store.rollback_to_block(0);
-    let err = out.expect_err("rollback_to_block is stub until RBK-001+");
-    match err {
-        CoinStoreError::StorageError(msg) => {
-            assert!(msg.contains("rollback_to_block:"), "got: {msg}");
-        }
-        other => panic!("unexpected error variant: {other:?}"),
-    }
+    assert!(out.is_ok(), "rollback_to_block(0) at height 0 should be a no-op");
+    let result = out.unwrap();
+    assert_eq!(result.new_height, 0);
+    assert_eq!(result.coins_deleted, 0);
 }
 
 /// **Acceptance:** [`CoinStore::rollback_n_blocks`] shares the same [`RollbackResult`] success type (RBK-005).
@@ -244,12 +242,9 @@ fn vv_req_api_006_coin_store_rollback_n_blocks_result_type() {
     let mut store = CoinStore::new(dir.path()).unwrap();
     store.init_genesis(vec![], 1_700_000_000).unwrap();
 
+    // rollback_n_blocks(2) at height 0 → target = -2 → full reset → no-op since already at 0.
     let out: Result<RollbackResult, CoinStoreError> = store.rollback_n_blocks(2);
-    let err = out.expect_err("rollback_n_blocks is stub until RBK-005+");
-    match err {
-        CoinStoreError::StorageError(msg) => {
-            assert!(msg.contains("rollback_n_blocks:"), "got: {msg}");
-        }
-        other => panic!("unexpected error variant: {other:?}"),
-    }
+    assert!(out.is_ok(), "rollback_n_blocks(2) at height 0 should succeed as no-op");
+    let result = out.unwrap();
+    assert_eq!(result.new_height, 0);
 }

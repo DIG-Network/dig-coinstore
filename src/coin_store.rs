@@ -1019,17 +1019,20 @@ impl CoinStore {
         })
     }
 
-    /// Roll the coinstate back to `target_height` (may be negative for full reset per RBK-001).
+    /// Roll the coinstate back to `target_height` ([SPEC.md §3.3](../../docs/resources/SPEC.md)).
     ///
-    /// **Return type (API-006 / RBK-001):** `Result<RollbackResult, CoinStoreError>` with enriched
-    /// deleted / un-spent counts vs Chia's raw map alone ([`RollbackResult`]).
+    /// Reverses coin state changes: deletes coins confirmed after `target_height` (RBK-002),
+    /// un-spends coins spent after `target_height` (RBK-003), cleans up hints (HNT-005),
+    /// rebuilds Merkle tree (RBK-006), and atomically commits (RBK-007).
     ///
-    /// **Status:** Rollback scan + Merkle rebuild (RBK-002..007) are not wired yet. Without genesis,
-    /// returns [`CoinStoreError::NotInitialized`]. If `target_height` is strictly greater than
-    /// [`Self::height`], returns [`CoinStoreError::RollbackAboveTip`] (API-010). Otherwise returns
-    /// [`CoinStoreError::StorageError`] with a `"rollback_to_block:"` prefix until RBK ships.
+    /// Negative `target_height` triggers a full reset (height 0).
+    /// `target_height` equal to current height is a no-op.
     ///
-    /// # Requirement: API-006 (type surface), API-010 (`RollbackAboveTip`), RBK-001 (full behavior)
+    /// # Chia reference ([SPEC.md §1.4](../../docs/resources/SPEC.md))
+    ///
+    /// [`coin_store.py:561-624`](https://github.com/Chia-Network/chia-blockchain/blob/6e7a4954edccd8ab83fcacf938cfc42ddfcad7f2/chia/full_node/coin_store.py#L561)
+    ///
+    /// # Requirements: RBK-001 through RBK-007
     pub fn rollback_to_block(
         &mut self,
         target_height: i64,
@@ -1043,9 +1046,218 @@ impl CoinStore {
                 current: self.height,
             });
         }
-        Err(CoinStoreError::StorageError(format!(
-            "rollback_to_block: not implemented - target_height {target_height} (RBK-001..RBK-007)"
-        )))
+
+        // Clamp negative targets to 0 (full reset).
+        let effective_target = if target_height < 0 {
+            0u64
+        } else {
+            target_height as u64
+        };
+
+        // No-op if already at or below target.
+        if self.height <= effective_target && target_height >= 0 {
+            return Ok(RollbackResult {
+                modified_coins: HashMap::new(),
+                coins_deleted: 0,
+                coins_unspent: 0,
+                new_height: self.height,
+            });
+        }
+
+        let mut modified_coins: HashMap<Bytes32, CoinRecord> = HashMap::new();
+        let mut coins_deleted: usize = 0;
+        let mut coins_unspent: usize = 0;
+        let mut batch = WriteBatch::new();
+        let mut merkle_removals: Vec<Bytes32> = Vec::new();
+        let mut merkle_updates: Vec<(Bytes32, Bytes32)> = Vec::new();
+
+        // RBK-002: Delete coins confirmed after target_height.
+        // Scan CF_COIN_BY_CONFIRMED_HEIGHT for all heights > effective_target.
+        for scan_height in (effective_target + 1)..=self.height {
+            let prefix = scan_height.to_be_bytes();
+            let entries = self
+                .backend
+                .prefix_scan(schema::CF_COIN_BY_CONFIRMED_HEIGHT, &prefix)?;
+
+            for (key, _) in entries {
+                if key.len() < 40 {
+                    continue;
+                }
+                let coin_id = schema::coin_id_from_key(&key[8..40]);
+
+                // Fetch pre-deletion snapshot.
+                if let Some(rec) = self.get_coin_record(&coin_id)? {
+                    modified_coins.insert(coin_id, rec.clone());
+
+                    // Delete primary record.
+                    batch.delete(schema::CF_COIN_RECORDS, &schema::coin_key(&coin_id));
+
+                    // Delete from puzzle hash index.
+                    let ph_key =
+                        schema::puzzle_hash_coin_key(&rec.coin.puzzle_hash, &coin_id);
+                    batch.delete(schema::CF_COIN_BY_PUZZLE_HASH, &ph_key);
+                    batch.delete(schema::CF_UNSPENT_BY_PUZZLE_HASH, &ph_key);
+
+                    // Delete from parent index.
+                    let parent_key =
+                        schema::parent_coin_key(&rec.coin.parent_coin_info, &coin_id);
+                    batch.delete(schema::CF_COIN_BY_PARENT, &parent_key);
+
+                    // Delete from confirmed height index.
+                    let ch_key = schema::height_coin_key(rec.confirmed_height, &coin_id);
+                    batch.delete(schema::CF_COIN_BY_CONFIRMED_HEIGHT, &ch_key);
+
+                    // Delete from spent height index if spent.
+                    if let Some(sh) = rec.spent_height {
+                        let sh_key = schema::height_coin_key(sh, &coin_id);
+                        batch.delete(schema::CF_COIN_BY_SPENT_HEIGHT, &sh_key);
+                    }
+
+                    merkle_removals.push(coin_id);
+                    coins_deleted += 1;
+                }
+            }
+        }
+
+        // HNT-005: Remove hints for deleted coins.
+        let deleted_ids: Vec<Bytes32> = modified_coins
+            .keys()
+            .filter(|id| {
+                modified_coins[*id].confirmed_height > effective_target
+            })
+            .copied()
+            .collect();
+        for coin_id in &deleted_ids {
+            // Scan forward index for this coin's hints.
+            let hint_entries = self
+                .backend
+                .prefix_scan(schema::CF_HINTS, coin_id.as_ref())?;
+            for (fwd_key, _) in hint_entries {
+                // Extract hint portion.
+                if fwd_key.len() > 32 {
+                    let hint_bytes = &fwd_key[32..];
+                    let mut rev_key = Vec::with_capacity(hint_bytes.len() + 32);
+                    rev_key.extend_from_slice(hint_bytes);
+                    rev_key.extend_from_slice(coin_id.as_ref());
+                    batch.delete(schema::CF_HINTS_BY_VALUE, &rev_key);
+                }
+                batch.delete(schema::CF_HINTS, &fwd_key);
+            }
+        }
+
+        // RBK-003: Un-spend coins spent after target_height.
+        for scan_height in (effective_target + 1)..=self.height {
+            let prefix = scan_height.to_be_bytes();
+            let entries = self
+                .backend
+                .prefix_scan(schema::CF_COIN_BY_SPENT_HEIGHT, &prefix)?;
+
+            for (key, _) in entries {
+                if key.len() < 40 {
+                    continue;
+                }
+                let coin_id = schema::coin_id_from_key(&key[8..40]);
+
+                // Skip coins already deleted in RBK-002.
+                if modified_coins.contains_key(&coin_id) {
+                    // Already handled as deletion — just remove spent height index entry.
+                    batch.delete(schema::CF_COIN_BY_SPENT_HEIGHT, &key);
+                    continue;
+                }
+
+                if let Some(mut rec) = self.get_coin_record(&coin_id)? {
+                    // Save pre-modification snapshot.
+                    modified_coins.insert(coin_id, rec.clone());
+
+                    // Clear spent_height.
+                    rec.spent_height = None;
+
+                    // RBK-004: Recompute ff_eligible — check if parent exists.
+                    rec.ff_eligible = self
+                        .get_coin_record(&rec.coin.parent_coin_info)?
+                        .is_some();
+
+                    let record_bytes = Self::serialize_coin_record_storage_bytes(&rec)?;
+
+                    // Update primary record.
+                    batch.put(
+                        schema::CF_COIN_RECORDS,
+                        &schema::coin_key(&coin_id),
+                        &record_bytes,
+                    );
+
+                    // Re-add to unspent puzzle hash index.
+                    let ph_key =
+                        schema::puzzle_hash_coin_key(&rec.coin.puzzle_hash, &coin_id);
+                    batch.put(schema::CF_UNSPENT_BY_PUZZLE_HASH, &ph_key, &[]);
+
+                    // Remove from spent height index.
+                    batch.delete(schema::CF_COIN_BY_SPENT_HEIGHT, &key);
+
+                    // Update Merkle leaf.
+                    let leaf_hash = merkle_leaf_hash(&record_bytes);
+                    merkle_updates.push((coin_id, leaf_hash));
+
+                    coins_unspent += 1;
+                }
+            }
+        }
+
+        // RBK-006: Merkle tree batch rebuild.
+        if !merkle_removals.is_empty() {
+            self.merkle_tree.batch_remove(&merkle_removals).map_err(|e| {
+                CoinStoreError::StorageError(format!("Merkle remove during rollback: {}", e))
+            })?;
+        }
+        if !merkle_updates.is_empty() {
+            self.merkle_tree.batch_update(&merkle_updates).map_err(|e| {
+                CoinStoreError::StorageError(format!("Merkle update during rollback: {}", e))
+            })?;
+        }
+
+        // Update chain tip metadata.
+        let new_height = effective_target;
+        batch.put(
+            schema::CF_METADATA,
+            META_HEIGHT,
+            &new_height.to_le_bytes(),
+        );
+
+        // For the tip hash and timestamp, we need to find the block at effective_target.
+        // If rolling back to 0, use zero hash and genesis timestamp.
+        // Otherwise, these would come from block headers — for now use zero/0 as placeholder
+        // since we don't store block headers. The caller should provide tip context.
+        let new_tip_hash = if new_height == 0 {
+            Bytes32::from([0u8; 32])
+        } else {
+            // We don't store block headers, so we can't recover the old tip hash.
+            // Use zero hash — the caller must re-set via the next apply_block.
+            Bytes32::from([0u8; 32])
+        };
+        let new_timestamp = if new_height == 0 { self.timestamp } else { self.timestamp };
+
+        batch.put(schema::CF_METADATA, META_TIP_HASH, new_tip_hash.as_ref());
+        batch.put(
+            schema::CF_METADATA,
+            META_TIMESTAMP,
+            &new_timestamp.to_le_bytes(),
+        );
+
+        // RBK-007: Atomic commit.
+        self.backend.batch_write(batch)?;
+
+        // Update in-memory state.
+        self.height = new_height;
+        self.tip_hash = new_tip_hash;
+        // Recompute root after removals/updates.
+        let _ = self.merkle_tree.root();
+
+        Ok(RollbackResult {
+            modified_coins,
+            coins_deleted,
+            coins_unspent,
+            new_height,
+        })
     }
 
     /// Convenience: roll back exactly `n` blocks from the current tip.
@@ -1056,9 +1268,9 @@ impl CoinStore {
         if !self.initialized {
             return Err(CoinStoreError::NotInitialized);
         }
-        Err(CoinStoreError::StorageError(format!(
-            "rollback_n_blocks: not implemented - n {n} (RBK-005 delegates to rollback_to_block)"
-        )))
+        // RBK-005: Compute target height and delegate to rollback_to_block.
+        let target = (self.height as i64) - (n as i64);
+        self.rollback_to_block(target)
     }
 
     // ─────────────────────────────────────────────────────────────────────
