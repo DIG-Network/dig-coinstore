@@ -27,7 +27,7 @@
 //! | [`coin_store`] | Primary public API struct | API-001 |
 //! | [`config`] | Configuration types and constants | API-003 |
 //! | [`error`] | Error enum | API-004 |
-//! | [`types`] | Domain types (CoinRecord, BlockData, etc.) | API-002, API-005, API-006, API-007, API-008..009 |
+//! | [`types`] | Domain types (CoinRecord, BlockData, etc.) | API-002, API-005..009 |
 //! | [`block_apply`] | Block application pipeline | BLK-001..014 |
 //! | [`rollback`] | Rollback / reorg recovery | RBK-001..007 |
 //! | [`queries`] | Coin state queries | QRY-001..011 |
@@ -104,7 +104,7 @@ pub mod error;
 
 pub use error::CoinStoreError;
 
-/// Domain types: CoinRecord, BlockData, CoinAddition, result structs, type aliases.
+/// Domain types: CoinRecord, BlockData, CoinAddition, result structs, [`CoinStoreStats`], type aliases.
 /// See: docs/requirements/domains/crate_api/specs/API-002.md
 pub mod types;
 

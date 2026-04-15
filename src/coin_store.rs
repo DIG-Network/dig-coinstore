@@ -22,13 +22,13 @@ use chia_protocol::Bytes32;
 use crate::config::{CoinStoreConfig, StorageBackend as ConfiguredEngine};
 use crate::error::CoinStoreError;
 use crate::merkle::{merkle_leaf_hash, SparseMerkleTree};
+use crate::types::{ApplyBlockResult, BlockData, CoinRecord, CoinStoreStats, RollbackResult};
 #[cfg(feature = "lmdb-storage")]
 use crate::storage::lmdb::LmdbBackend;
 #[cfg(feature = "rocksdb-storage")]
 use crate::storage::rocksdb::RocksDbBackend;
 use crate::storage::schema;
 use crate::storage::{StorageBackend as KvStore, WriteBatch};
-use crate::types::{ApplyBlockResult, BlockData, CoinRecord, CoinStoreStats, RollbackResult};
 
 /// Metadata keys stored in the `metadata` column family.
 const META_HEIGHT: &[u8] = b"chain_height";
@@ -315,7 +315,7 @@ impl CoinStore {
     /// Aggregate [`CoinStoreStats`] for monitoring and QRY-010 chain-state reads.
     ///
     /// **Sources:** `height`, `timestamp`, `tip_hash` mirror in-memory tip metadata; `state_root` uses
-    /// [`SparseMerkleTree::root_readonly`](crate::merkle::SparseMerkleTree::root_readonly) so this stays `&self`
+    /// [`SparseMerkleTree::root_observed`](crate::merkle::SparseMerkleTree::root_observed) so this stays `&self`
     /// per [`docs/resources/SPEC.md`](../../docs/resources/SPEC.md) §3.12. `unspent_count`, `spent_count`,
     /// and `total_unspent_value` are derived from `coin_records` rows (bincode [`CoinRecord`] or the
     /// temporary genesis byte layout from [`Self::serialize_genesis_record`]) until PRF-003 materialized
@@ -329,13 +329,16 @@ impl CoinStore {
     ///
     /// # Requirement: API-007
     pub fn stats(&self) -> CoinStoreStats {
-        let state_root = self.merkle_tree.root_readonly();
+        let state_root = self.merkle_tree.root_observed();
         let mut unspent_count: u64 = 0;
         let mut spent_count: u64 = 0;
         let mut total_unspent_value: u64 = 0;
 
         if self.initialized {
-            match self.backend.prefix_scan(schema::CF_COIN_RECORDS, &[]) {
+            match self
+                .backend
+                .prefix_scan(schema::CF_COIN_RECORDS, &[])
+            {
                 Ok(entries) => {
                     for (_key, value) in entries {
                         if let Some(rec) = Self::decode_coin_record_bytes(&value) {
