@@ -1,4 +1,23 @@
 //! # STR-004 Tests — Merkle Module
+//!
+//! Verifies **STR-004** (merkle module layout) and **MRK-001** (sparse Merkle tree operations).
+//! Covers empty tree determinism, batch insert/update/remove, deferred root recomputation,
+//! error discipline, and 256-level depth correctness.
+//!
+//! # Requirement: STR-004, MRK-001
+//! # SPEC.md: §9 (Merkle Tree), §1.3 #13 (Custom SMT Decision), §1.6 #1 (Merkle Commitment),
+//! #          §1.6 #7 (Batch Merkle Updates)
+//!
+//! ## How these tests prove the requirement
+//!
+//! - **Empty tree root** = `empty_hash(256)` — the starting state ([SPEC.md §9](../../docs/resources/SPEC.md)).
+//! - **Batch determinism:** Two trees from same entries produce identical roots (pure function).
+//! - **Deferred recomputation:** After `batch_insert`, tree is dirty; root computed only on `root()` call.
+//! - **256-level depth:** Two keys differing only in bit 255 coexist with distinct leaf values.
+//! - **Insert-then-remove = empty:** Proves `batch_remove` is inverse of `batch_insert`.
+//!
+//! Chia does not use a sparse Merkle tree — dig-coinstore adds it for light-client proofs
+//! ([SPEC.md §1.6 #1,3](../../docs/resources/SPEC.md)).
 
 mod helpers;
 

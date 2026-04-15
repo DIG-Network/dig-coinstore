@@ -1,4 +1,19 @@
 //! # MRK-005 Tests — Proof Verification
+//!
+//! Verifies **MRK-005**: `SparseMerkleProof::verify()` validates proofs against a trusted root.
+//! Verification is the counterpart to MRK-004 (proof generation).
+//!
+//! # Requirement: MRK-005
+//! # SPEC.md: §3.13 (Merkle Proofs API), §1.6 #3 (Proofs — Improvement Over Chia)
+//!
+//! ## How these tests prove the requirement
+//!
+//! - **Exclusion verification:** Non-existent key with sibling present verifies with `value = None`.
+//! - **Wrong root rejection:** Valid proof does NOT verify against an arbitrary root.
+//! - **Multi-leaf verification:** All inclusion + exclusion proofs verify against the correct root.
+//!
+//! `verify()` is a **static method** — no tree state needed, only proof data + trusted root
+//! ([SPEC.md §3.13](../../docs/resources/SPEC.md)). Critical for light clients.
 
 mod helpers;
 

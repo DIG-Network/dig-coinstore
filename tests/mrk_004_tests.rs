@@ -1,4 +1,20 @@
 //! # MRK-004 Tests — Proof Generation
+//!
+//! Verifies **MRK-004**: `SparseMerkleTree::get_proof()` generates Merkle proofs for
+//! inclusion (key exists) and exclusion (key absent) cases.
+//!
+//! # Requirement: MRK-004
+//! # SPEC.md: §3.13 (Merkle Proofs API), §1.6 #3 (Proofs — Improvement Over Chia)
+//!
+//! ## How these tests prove the requirement
+//!
+//! - **Inclusion proof:** After inserting a key, `get_proof(key)` returns `value = Some(leaf_hash)`
+//!   and verifies against the tree root.
+//! - **Exclusion proof (empty tree):** `value = None` verifies against the empty root.
+//! - **Multi-leaf stability:** 5 inclusion proofs + 1 exclusion proof all verify against same root.
+//!
+//! These proofs enable DIG Network light clients to verify coin existence without the full coinstate
+//! ([SPEC.md §1.6 #3](../../docs/resources/SPEC.md)). Chia has no equivalent.
 
 mod helpers;
 

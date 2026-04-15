@@ -1,4 +1,19 @@
 //! # STR-001 Tests — Cargo.toml Configuration
+//!
+//! Verifies requirement **STR-001**: Cargo.toml with dependencies, feature gates, and metadata.
+//! Each test imports a different production dependency to prove it resolves, compiles, and functions.
+//!
+//! # Requirement: STR-001
+//! # Spec: docs/requirements/domains/crate_structure/specs/STR-001.md
+//! # SPEC.md: §1.2 (Crate Dependencies), §2.7 (Constants)
+//!
+//! ## How these tests prove the requirement
+//!
+//! Each test `use`s a type from a dependency listed in [SPEC.md §1.2](../../docs/resources/SPEC.md):
+//! `chia-sha2`, `chia-protocol`, `chia-traits`, `dig-clvm`, `dig-constants`, `serde`, `bincode`,
+//! `parking_lot`, `thiserror`, `tracing`, `lru`, `rayon`. If any dependency is missing or
+//! version-conflicted, the test fails at **compile time**. The default-feature test checks
+//! `cfg!(feature = "rocksdb-storage")` proving `[features] default` is wired.
 
 mod helpers;
 
@@ -6,7 +21,7 @@ mod helpers;
 // STR-001: Cargo.toml Configuration
 // Requirement: docs/requirements/domains/crate_structure/specs/STR-001.md
 // NORMATIVE: docs/requirements/domains/crate_structure/NORMATIVE.md#STR-001
-// SPEC.md: Sections 1, 10
+// SPEC.md: §1.2 (Crate Dependencies)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Verifies STR-001: The default feature is `rocksdb-storage`.

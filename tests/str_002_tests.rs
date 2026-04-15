@@ -1,4 +1,17 @@
 //! # STR-002 Tests — Module Hierarchy
+//!
+//! Verifies **STR-002**: `src/lib.rs` root module with 12 `pub mod` declarations and the
+//! submodule layout for `storage/`, `merkle/`, and `cache/`.
+//!
+//! # Requirement: STR-002
+//! # SPEC.md: §7 (Storage Architecture — submodules), §9 (Merkle Tree — submodules)
+//!
+//! ## How these tests prove the requirement
+//!
+//! - **Compile-time:** Each module path (`dig_coinstore::coin_store`, etc.) must resolve or the
+//!   binary fails to compile — stronger than runtime checks.
+//! - **Submodule depth:** `storage::schema`, `merkle::proof`, `cache::counters` prove subdirectory layout.
+//! - **Feature gates:** `storage::rocksdb` compiles under `#[cfg(feature = "rocksdb-storage")]`.
 
 mod helpers;
 

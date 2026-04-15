@@ -1,4 +1,18 @@
 //! # STR-005 Tests — Re-export Strategy
+//!
+//! Verifies **STR-005**: re-export of Chia ecosystem types from the crate root. Consumers of
+//! `dig-coinstore` should use `Coin`, `Bytes32`, `CoinState`, `CoinStateFilters` without
+//! adding direct dependencies on `chia-protocol` or `dig-clvm`.
+//!
+//! # Requirement: STR-005
+//! # SPEC.md: §1.2 (Crate Dependencies), §1.3 #12 (Custom CoinRecord),
+//! #          §1.3 #14 (CoinStateFilters from chia-protocol)
+//!
+//! ## How these tests prove the requirement
+//!
+//! - **Importability:** `dig_coinstore::Coin`, `::Bytes32`, `::CoinState`, `::CoinStateFilters` compile.
+//! - **Type identity:** `dig_coinstore::Coin` **is** `dig_clvm::Coin` (same Rust type, not just same name).
+//! - **Dependency chain:** `chia-protocol → dig-clvm → dig-coinstore → consumers`.
 
 mod helpers;
 
