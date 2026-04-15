@@ -91,13 +91,13 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 
 ## Phase 7: Rollback
 
-- [ ] RBK-001 — `rollback_to_block()` entry point and return type
-- [ ] RBK-002 — Coin deletion (confirmed after target height)
-- [ ] RBK-003 — Coin un-spending (spent after target height)
-- [ ] RBK-004 — FF-eligible recomputation during rollback (parent EXISTS check)
-- [ ] RBK-005 — `rollback_n_blocks()` convenience wrapper
-- [ ] RBK-006 — Merkle tree batch rebuild during rollback
-- [ ] RBK-007 — Rollback atomicity (all-or-nothing on failure)
+- [x] RBK-001 — `rollback_to_block()` entry point and return type
+- [x] RBK-002 — Coin deletion (confirmed after target height)
+- [x] RBK-003 — Coin un-spending (spent after target height)
+- [x] RBK-004 — FF-eligible recomputation during rollback (parent EXISTS check)
+- [x] RBK-005 — `rollback_n_blocks()` convenience wrapper
+- [x] RBK-006 — Merkle tree batch rebuild during rollback
+- [x] RBK-007 — Rollback atomicity (all-or-nothing on failure)
 
 ## Phase 8: Concurrency
 
