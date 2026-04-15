@@ -90,6 +90,8 @@ fn vv_req_str_002_storage_submodules() {
     // schema is always available (not feature-gated)
     #[allow(unused_imports)]
     use dig_coinstore::storage::schema as _;
+    #[allow(unused_imports)]
+    use dig_coinstore::storage::kv_bincode as _;
 
     // rocksdb submodule available with default features
     #[cfg(feature = "rocksdb-storage")]

@@ -7,6 +7,10 @@
 //! lexicographic byte comparison matches numeric order. This is critical for
 //! range scans in ordered key-value stores.
 //!
+//! **STO-008:** composite keys include [`coin_hint_key`] / [`hint_coin_key`], [`height_from_key`] for any
+//! height-prefixed 40-byte key, [`metadata_key`], and [`merkle_node_key`] (33-byte `level||path` for MRK-003).
+//! Value-side bincode lives in [`kv_bincode`](crate::storage::kv_bincode).
+//!
 //! # Requirement: STO-002, STO-008
 //! # Spec: docs/requirements/domains/storage/specs/STO-008.md
 //! # SPEC.md: Section 7.2 (column family key/value table)
@@ -222,4 +226,68 @@ pub fn snapshot_key(height: u64) -> [u8; 8] {
 #[inline]
 pub fn height_from_snapshot_key(key: &[u8]) -> u64 {
     u64::from_be_bytes(key[..8].try_into().expect("key must be 8 bytes"))
+}
+
+/// Height prefix (first 8 bytes, big-endian `u64`) from a height-prefixed composite key.
+///
+/// Used for: [`height_coin_key`] rows (40 bytes) and any key whose first component is an 8-byte BE height.
+/// Spec name in [`STO-008.md`](../../docs/requirements/domains/storage/specs/STO-008.md): `height_from_key`.
+#[inline]
+pub fn height_from_key(key: &[u8]) -> u64 {
+    assert!(
+        key.len() >= 8,
+        "height_from_key: key must contain at least 8 bytes for u64 BE prefix"
+    );
+    u64::from_be_bytes(key[..8].try_into().expect("len checked"))
+}
+
+/// Forward hint index key: `coin_id || hint` (64 bytes).
+///
+/// Used for: [`CF_HINTS`].
+#[inline]
+pub fn coin_hint_key(coin_id: &Bytes32, hint: &Bytes32) -> [u8; 64] {
+    let mut key = [0u8; 64];
+    key[..32].copy_from_slice(coin_id.as_ref());
+    key[32..].copy_from_slice(hint.as_ref());
+    key
+}
+
+/// Reverse hint index key: `hint || coin_id` (64 bytes).
+///
+/// Used for: [`CF_HINTS_BY_VALUE`].
+#[inline]
+pub fn hint_coin_key(hint: &Bytes32, coin_id: &Bytes32) -> [u8; 64] {
+    let mut key = [0u8; 64];
+    key[..32].copy_from_slice(hint.as_ref());
+    key[32..].copy_from_slice(coin_id.as_ref());
+    key
+}
+
+/// Metadata column family key: UTF-8 string bytes (variable length per STO-008).
+#[inline]
+pub fn metadata_key(name: &str) -> Vec<u8> {
+    name.as_bytes().to_vec()
+}
+
+/// Merkle internal node key: `level (1 byte) || path (32 bytes)` = 33 bytes ([`CF_MERKLE_NODES`], MRK-003).
+///
+/// **Rationale:** Matches [`crate::merkle::persistent`](../../merkle/persistent.rs) documented layout so
+/// MRK-003 can persist nodes without inventing a second encoding.
+#[inline]
+pub fn merkle_node_key(level: u8, path: &Bytes32) -> [u8; 33] {
+    let mut key = [0u8; 33];
+    key[0] = level;
+    key[1..].copy_from_slice(path.as_ref());
+    key
+}
+
+/// Split a 33-byte merkle node key into `(level, path)`.
+#[inline]
+pub fn merkle_node_from_key(key: &[u8]) -> Option<(u8, Bytes32)> {
+    if key.len() != 33 {
+        return None;
+    }
+    let mut path = [0u8; 32];
+    path.copy_from_slice(&key[1..33]);
+    Some((key[0], Bytes32::from(path)))
 }

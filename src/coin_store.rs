@@ -558,14 +558,12 @@ impl CoinStore {
         }
 
         for (coin_id, hint) in &snapshot.hints {
-            let mut fwd = Vec::with_capacity(64);
-            fwd.extend_from_slice(coin_id.as_ref());
-            fwd.extend_from_slice(hint.as_ref());
-            batch.put(schema::CF_HINTS, &fwd, &[]);
-            let mut rev = Vec::with_capacity(64);
-            rev.extend_from_slice(hint.as_ref());
-            rev.extend_from_slice(coin_id.as_ref());
-            batch.put(schema::CF_HINTS_BY_VALUE, &rev, &[]);
+            // STO-008: fixed-width hint keys via [`schema::coin_hint_key`] / [`schema::hint_coin_key`]
+            // (same 64-byte layout as the previous inline concat — keys are now centralized for MRK/HNT proofs).
+            let fwd = schema::coin_hint_key(coin_id, hint);
+            batch.put(schema::CF_HINTS, fwd.as_slice(), &[]);
+            let rev = schema::hint_coin_key(hint, coin_id);
+            batch.put(schema::CF_HINTS_BY_VALUE, rev.as_slice(), &[]);
             if batch.len() >= SNAPSHOT_RESTORE_BATCH_OPS {
                 self.backend.batch_write(std::mem::take(&mut batch))?;
             }
@@ -611,6 +609,10 @@ impl CoinStore {
     /// Serialize [`Self::snapshot`] and persist it under [`schema::CF_STATE_SNAPSHOTS`] keyed by
     /// [`Self::height`] (big-endian height key via [`schema::snapshot_key`]).
     ///
+    /// **STO-008:** payload uses [`crate::storage::kv_bincode::encode_coin_store_snapshot`] (fixint + big-endian).
+    /// [`Self::load_snapshot`] accepts both that layout and pre-STO-008 default-bincode blobs via
+    /// [`crate::storage::kv_bincode::decode_coin_store_snapshot_storage`].
+    ///
     /// Prunes older checkpoints when more than [`CoinStoreConfig::max_snapshots`] rows exist (oldest
     /// heights deleted first). If `max_snapshots == 0`, pruning is skipped (treated as “do not auto-prune”).
     ///
@@ -620,7 +622,7 @@ impl CoinStore {
             return Err(CoinStoreError::NotInitialized);
         }
         let snap = self.snapshot()?;
-        let payload = bincode::serialize(&snap)?;
+        let payload = crate::storage::kv_bincode::encode_coin_store_snapshot(&snap)?;
         let key = schema::snapshot_key(self.height);
         self.backend
             .put(schema::CF_STATE_SNAPSHOTS, &key, &payload)?;
@@ -636,7 +638,8 @@ impl CoinStore {
         match self.backend.get(schema::CF_STATE_SNAPSHOTS, &key)? {
             None => Ok(None),
             Some(bytes) => Ok(Some(
-                bincode::deserialize(&bytes).map_err(CoinStoreError::from_bincode_deserialize)?,
+                crate::storage::kv_bincode::decode_coin_store_snapshot_storage(&bytes)
+                    .map_err(CoinStoreError::from_bincode_deserialize)?,
             )),
         }
     }
@@ -680,7 +683,9 @@ impl CoinStore {
     /// Decode a `coin_records` value written either as bincode [`CoinRecord`] (STO-008 target) or the
     /// genesis-era fixed layout from [`Self::serialize_legacy_coin_record`].
     fn decode_coin_record_bytes(bytes: &[u8]) -> Option<CoinRecord> {
-        if let Ok(rec) = bincode::deserialize::<CoinRecord>(bytes) {
+        // STO-008 normative bincode (fixint + BE) first, then legacy default bincode (`ff_eligible` rows),
+        // then the fixed 97-byte genesis tuple ([`Self::decode_legacy_genesis_coin_record`]).
+        if let Ok(rec) = crate::storage::kv_bincode::decode_coin_record_storage(bytes) {
             return Some(rec);
         }
         Self::decode_legacy_genesis_coin_record(bytes)
@@ -817,7 +822,7 @@ impl CoinStore {
     /// represented in the legacy tuple (fast-forward eligibility bit).
     fn serialize_coin_record_storage_bytes(rec: &CoinRecord) -> Result<Vec<u8>, CoinStoreError> {
         if rec.ff_eligible {
-            Ok(bincode::serialize(rec)?)
+            Ok(crate::storage::kv_bincode::encode_coin_record(rec)?)
         } else {
             Ok(Self::serialize_legacy_coin_record(rec))
         }
