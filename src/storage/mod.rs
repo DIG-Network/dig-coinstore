@@ -28,12 +28,16 @@
 //! **STO-006 (RocksDB compaction + per-CF memtable depth):** [`tests/sto_006_tests.rs`](../../tests/sto_006_tests.rs).
 //! **STO-007 (feature gates + factory):** [`tests/sto_007_tests.rs`](../../tests/sto_007_tests.rs); compile-time guard
 //! in [`crate`](../../src/lib.rs) (`compile_error!` when no backend feature).
+//! **STO-008 (bincode + key helpers):** [`kv_bincode`](kv_bincode), [`schema`](schema); tests in
+//! [`tests/sto_008_tests.rs`](../../tests/sto_008_tests.rs).
 
 #[cfg(feature = "rocksdb-storage")]
 pub mod rocksdb;
 
 #[cfg(feature = "lmdb-storage")]
 pub mod lmdb;
+
+pub mod kv_bincode;
 
 pub mod schema;
 
