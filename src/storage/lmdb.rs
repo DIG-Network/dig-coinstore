@@ -257,6 +257,11 @@ impl StorageBackend for LmdbBackend {
         wtxn.commit().map_err(|e| map_heed("LMDB commit", e))
     }
 
+    /// Apply every [`WriteOp`] inside one LMDB write transaction, then **one** `commit` (**STO-005**).
+    ///
+    /// This mirrors the RocksDB story in [`crate::storage::rocksdb::RocksDbBackend::batch_write`]: either
+    /// every mutation lands on disk or none do — LMDB aborts the txn if any `put`/`delete` fails before
+    /// commit. Durability follows `heed`/`mdb_txn_commit` semantics (see [`STO-005.md`](../../docs/requirements/domains/storage/specs/STO-005.md)).
     fn batch_write(&self, batch: WriteBatch) -> Result<(), StorageError> {
         if batch.is_empty() {
             return Ok(());

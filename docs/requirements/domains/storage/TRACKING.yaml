@@ -61,10 +61,15 @@ items:
   - id: STO-005
     section: "Atomic Writes"
     summary: "WriteBatch atomic commit with single WAL fsync per block"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/storage/specs/STO-005.md"
-    tests: []
-    notes: ""
+    tests:
+      - tests/sto_005_tests.rs
+    notes: >
+      RocksDB `RocksDbBackend::batch_write` uses `DB::write_opt` with `WriteOptions::set_sync(true)` via
+      `sto005_batch_write_options()` (durable single WAL flush per logical batch). LMDB path unchanged:
+      one `write_txn` + `commit`. Verified by tests/sto_005_tests.rs (atomicity, empty batch, rollback on
+      unknown CF, deterministic order, perf vs N single-op batches, full-storage Rocks/LMDB parity).
 
   - id: STO-006
     section: "Compaction Strategy"

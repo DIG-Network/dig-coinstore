@@ -24,6 +24,7 @@
 //! **STO-003 (six LMDB databases, MVCC, `MapFull`):** [`tests/sto_003_tests.rs`](../../tests/sto_003_tests.rs).
 //! **STO-002 (Rocks column families):** [`tests/sto_002_tests.rs`](../../tests/sto_002_tests.rs).
 //! **STO-004 (RocksDB bloom / prefix / L0 pin):** [`tests/sto_004_tests.rs`](../../tests/sto_004_tests.rs).
+//! **STO-005 (WriteBatch atomic + durable commit):** [`tests/sto_005_tests.rs`](../../tests/sto_005_tests.rs).
 
 #[cfg(feature = "rocksdb-storage")]
 pub mod rocksdb;
@@ -90,7 +91,9 @@ pub enum WriteOp {
 ///
 /// Accumulates [`WriteOp`]s in memory, then commits them all at once
 /// via [`StorageBackend::batch_write`]. This ensures either all writes
-/// succeed or none do (atomicity).
+/// succeed or none do (atomicity). On RocksDB, the backend maps this to a
+/// single native write batch with **durable** WAL options (`sync=true`; see
+/// `src/storage/rocksdb.rs`); on LMDB, one write transaction + commit.
 ///
 /// # Usage
 ///
