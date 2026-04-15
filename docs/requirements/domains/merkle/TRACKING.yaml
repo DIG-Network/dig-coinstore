@@ -100,8 +100,19 @@ items:
 
   - id: MRK-006
     section: "Leaf Hash Function"
-    summary: "coin_record_hash(record) = chia_sha2::Sha256(bincode::serialize(record)), deterministic leaf hash using Chia's SHA-256"
-    status: gap
+    summary: "coin_record_hash(record) = chia_sha2::Sha256(STO-008 bincode bytes via kv_bincode::encode_coin_record)"
+    status: verified
     spec_ref: "docs/requirements/domains/merkle/specs/MRK-006.md"
-    tests: []
-    notes: "Uses chia_sha2::Sha256 for hash compatibility with Chia ecosystem"
+    tests:
+      - tests/mrk_006_tests.rs
+      - vv_req_mrk_006_deterministic
+      - vv_req_mrk_006_mutation_sensitivity
+      - vv_req_mrk_006_spent_vs_unspent
+      - vv_req_mrk_006_spent_height_zero_vs_unspent
+      - vv_req_mrk_006_coinbase_sensitivity
+      - vv_req_mrk_006_cross_platform_vector
+      - vv_req_mrk_006_matches_sto008_preimage
+      - vv_req_mrk_006_not_domain_wrapped_leaf_hash
+      - vv_req_mrk_006_used_in_tree
+      - vv_req_mrk_006_batch_update_rehashed_leaf
+    notes: "Production: `src/merkle/leaf_hash.rs` + `pub use` from `src/merkle/mod.rs`. Preimage bytes MUST match `kv_bincode::encode_coin_record` (STO-008) so disk rows and Merkle leaves stay aligned. MRK-006 digest is raw SHA256 (not `merkle_leaf_hash` / 0x00 domain prefix on the record blob)."
