@@ -8,8 +8,9 @@
 //!
 //! # Requirements
 //! - **API-002:** [`CoinRecord`], [`ChiaCoinRecord`], [`CoinId`]
-//! - **API-005:** [`BlockData`], [`CoinAddition`] (apply-block input shapes)
-//! - API-006..009: additional types (stubs tracked in those specs)
+//! - **API-005:** [`BlockData`], [`CoinAddition`]
+//! - **API-006:** [`ApplyBlockResult`], [`RollbackResult`]
+//! - API-007..009: additional types (stubs tracked in those specs)
 //!
 //! ## `ChiaCoinRecord` vs `chia_protocol::CoinRecord`
 //!
@@ -20,6 +21,8 @@
 //! `CoinRecord`, so we define [`ChiaCoinRecord`] here with **identical fields and semantics** to the
 //! current Chia reference implementation. When `dig-clvm` upgrades `chia-protocol`, [`ChiaCoinRecord`]
 //! should become `pub use chia_protocol::CoinRecord as ChiaCoinRecord` (STR-005).
+
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -214,82 +217,132 @@ impl CoinRecord {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Block application input — API-005
+// Block application input (API-005)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// These types are the **semantic** input to `CoinStore::apply_block()` (BLK-001+). They deliberately
-// exclude CLVM programs, signatures, and raw block bytes: the caller validates the block, runs the
-// generator, and passes extracted additions/removals/hints here. See SPEC.md §2.4 and Chia’s
-// `CoinStore.new_block()` parameter list (`coin_store.py`).
+// See: docs/requirements/domains/crate_api/specs/API-005.md,
+// docs/resources/SPEC.md §2.4, Chia `coin_store.py` `new_block()` parameters.
 
-/// Pre-validated state changes for one block height, consumed by [`crate::coin_store::CoinStore::apply_block`].
+/// One transaction-created coin plus ingestion metadata for [`BlockData::additions`].
 ///
-/// # Semantics
+/// **`same_as_parent`:** `true` when this coin’s [`Coin::puzzle_hash`] and [`Coin::amount`] match the
+/// spent parent’s puzzle hash and amount — the block pipeline uses this for singleton **fast-forward**
+/// eligibility ([`CoinRecord::ff_eligible`], BLK-007).
 ///
-/// - **Not a wire block:** This is a *derived* view after CLVM execution (API-005 Implementation Notes).
-/// - **Validation:** [`crate::coin_store::CoinStore::apply_block`] enforces height, parent hash, reward
-///   counts, uniqueness, hints, and optional state root (BLK-002..009); constructing a [`BlockData`]
-///   value alone does not run those checks.
+/// **`coin_id`:** For valid blocks this MUST equal [`Coin::coin_id`] on [`Self::coin`]. The struct does not
+/// enforce equality at construction time; BLK-* / `apply_block` validation rejects mismatches so callers
+/// cannot poison the store with an inconsistent ID ([API-005 test plan](docs/requirements/domains/crate_api/specs/API-005.md#verification)).
 ///
-/// # Documentation links
-///
-/// - Normative: [`API-005`](../../docs/requirements/domains/crate_api/NORMATIVE.md#API-005)
-/// - Spec + test plan: [`API-005.md`](../../docs/requirements/domains/crate_api/specs/API-005.md)
-/// - Chia reference: <https://github.com/Chia-Network/chia-blockchain/blob/main/chia/full_node/coin_store.py>
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BlockData {
-    /// Block height; pipeline requires `height == chain_tip + 1` (BLK-002).
-    pub height: u64,
-    /// Unix seconds from the block header (propagated onto new [`CoinRecord`] rows).
-    pub timestamp: u64,
-    /// This block’s header hash (chain tracking / tip updates).
-    pub block_hash: Bytes32,
-    /// Expected parent block hash (must match current tip before apply; BLK-003).
-    pub parent_hash: Bytes32,
-    /// Transaction-created coins plus [`CoinAddition`] metadata (`tx_additions` in Chia).
-    pub additions: Vec<CoinAddition>,
-    /// Coin IDs spent by transactions in this block (`tx_removals` in Chia).
-    pub removals: Vec<CoinId>,
-    /// Block reward outputs (farmer + pool); genesis height uses an empty vec per BLK-004.
-    pub coinbase_coins: Vec<Coin>,
-    /// Hints extracted from `CREATE_COIN` for wallet-style lookups (HNT-*).
-    pub hints: Vec<(CoinId, Bytes32)>,
-    /// When [`Some`], BLK-009 compares the Merkle root after apply to this value.
-    pub expected_state_root: Option<Bytes32>,
-}
-
-/// One transaction output: the [`Coin`] being created, its precomputed ID, and FF metadata.
-///
-/// The `same_as_parent` bit mirrors Chia’s `tx_additions` tuple flag: the **caller** decides whether
-/// this coin’s puzzle hash and amount match its parent (singleton fast-forward pattern). That flag
-/// becomes [`CoinRecord::ff_eligible`] at ingestion when `apply_block` runs (BLK-007).
-///
-/// # ID consistency
-///
-/// Callers should set [`CoinAddition::coin_id`] to [`Coin::coin_id()`] on [`CoinAddition::coin`].
-/// The type does not enforce equality at construction; BLK-* validation may reject mismatches once
-/// the pipeline is implemented (see API-005 test plan: `test_coin_id_mismatch_in_addition`).
-///
-/// # Documentation links
-///
-/// - [`API-005.md`](../../docs/requirements/domains/crate_api/specs/API-005.md)
+/// **Chia reference:** `tx_additions` tuples in
+/// [`coin_store.py`](https://github.com/Chia-Network/chia-blockchain/blob/main/chia/full_node/coin_store.py).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CoinAddition {
-    /// Declared coin ID (normally [`Coin::coin_id()`] of [`CoinAddition::coin`]).
+    /// Coin ID (`sha256(parent || puzzle_hash || amount)`) — use [`Coin::coin_id`], never a custom hash.
     pub coin_id: CoinId,
     /// The created coin (parent id, puzzle hash, amount).
     pub coin: Coin,
-    /// Singleton fast-forward hint: same puzzle hash and amount as parent coin.
+    /// Same puzzle hash and amount as the parent coin being spent in this block.
     pub same_as_parent: bool,
 }
 
-/// Placeholder — API-006 (`ApplyBlockResult`).
-#[derive(Debug, Clone, Default)]
-pub struct ApplyBlockResult;
+impl CoinAddition {
+    /// Build from a [`Coin`] using [`Coin::coin_id`] as [`Self::coin_id`] (recommended for callers).
+    ///
+    /// **Rationale:** Centralizes the “no custom coin ID” rule ([STR-005](docs/requirements/domains/crate_structure/specs/STR-005.md),
+    /// project `start.md` hard rules).
+    #[must_use]
+    pub fn from_coin(coin: Coin, same_as_parent: bool) -> Self {
+        let coin_id = coin.coin_id();
+        Self {
+            coin_id,
+            coin,
+            same_as_parent,
+        }
+    }
+}
 
-/// Placeholder — API-006 (`RollbackResult`).
-#[derive(Debug, Clone, Default)]
-pub struct RollbackResult;
+/// Pre-validated block state changes: input to `CoinStore::apply_block` (BLK-*).
+///
+/// The coinstore **does not** run CLVM — the caller extracts additions, removals, coinbase rewards, and
+/// hints from execution results, then fills this struct ([API-005](docs/requirements/domains/crate_api/specs/API-005.md#summary)).
+///
+/// | Field | Role |
+/// |-------|------|
+/// | `height` / `timestamp` / `block_hash` / `parent_hash` | Chain linkage + time (validated in BLK-002, BLK-003) |
+/// | `additions` / `removals` | UTXO delta |
+/// | `coinbase_coins` | Farmer + pool rewards (count rules: BLK-004) |
+/// | `hints` | CREATE_COIN hint bytes for the hint index (HNT-*) |
+/// | `expected_state_root` | Optional post-apply root check (BLK-009) |
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockData {
+    /// Block height; must be `current_height + 1` when applied ([BLK-002](docs/requirements/domains/block_application/specs/BLK-002.md)).
+    pub height: u64,
+    /// Unix timestamp (seconds) of the block.
+    pub timestamp: u64,
+    /// This block’s header hash (tip / chain tracking).
+    pub block_hash: Bytes32,
+    /// Parent block header hash; must match current tip ([BLK-003](docs/requirements/domains/block_application/specs/BLK-003.md)).
+    pub parent_hash: Bytes32,
+    /// Transaction-created coins (+ metadata); Chia `tx_additions`.
+    pub additions: Vec<CoinAddition>,
+    /// Spent coin IDs from transaction spends in this block.
+    pub removals: Vec<CoinId>,
+    /// Block reward outputs (empty at genesis; ≥ 2 after — [BLK-004](docs/requirements/domains/block_application/specs/BLK-004.md)).
+    pub coinbase_coins: Vec<Coin>,
+    /// Hint bytes per coin id from CREATE_COIN conditions (wallet / subscription index).
+    pub hints: Vec<(CoinId, Bytes32)>,
+    /// If set, `apply_block` verifies the computed state root matches ([BLK-009](docs/requirements/domains/block_application/specs/BLK-009.md)).
+    pub expected_state_root: Option<Bytes32>,
+}
+
+/// Summary returned after a successful [`crate::coin_store::CoinStore::apply_block`] (success path of
+/// `Result<ApplyBlockResult, CoinStoreError>`).
+///
+/// **Source of truth:** [`docs/resources/SPEC.md`](../../docs/resources/SPEC.md) §3.2. Field meanings:
+/// post-apply Merkle **state root**, how many coins were **created** (tx additions + coinbase),
+/// how many were **marked spent**, and the new tip **height** (= input block height when validation passes).
+///
+/// **Chia note:** Chia’s `new_block()` updates storage in place and returns nothing; this struct is the
+/// dig-coinstore contract for observability and tests ([API-006](docs/requirements/domains/crate_api/specs/API-006.md)).
+///
+/// # Requirement: API-006
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplyBlockResult {
+    /// Merkle root after inserting additions, marking removals, and batch-updating the tree (BLK-013).
+    pub state_root: Bytes32,
+    /// `block.additions.len() + block.coinbase_coins.len()` after successful apply (API-006 field table).
+    pub coins_created: usize,
+    /// `block.removals.len()` — each removal marks one coin spent at this height.
+    pub coins_spent: usize,
+    /// New chain tip height (same as applied [`BlockData::height`] on success).
+    pub height: u64,
+}
+
+/// Summary returned after a successful rollback ([`crate::coin_store::CoinStore::rollback_to_block`],
+/// [`crate::coin_store::CoinStore::rollback_n_blocks`]).
+///
+/// **`modified_coins`:** Chia’s `rollback_to_block` returns `dict[bytes32, CoinRecord]`
+/// ([`coin_store.py:567`](https://github.com/Chia-Network/chia-blockchain/blob/6e7a4954edccd8ab83fcacf938cfc42ddfcad7f2/chia/full_node/coin_store.py#L567)).
+/// dig-coinstore keeps that map and adds explicit **`coins_deleted`** / **`coins_unspent`** counts
+/// (SPEC §1.6 improvement #11; [API-006](docs/requirements/domains/crate_api/specs/API-006.md)).
+///
+/// **Count invariant (well-formed results):** For each entry in `modified_coins`, the rollback either
+/// **deleted** a coin confirmed after the target height (`coins_deleted`) or **reverted a spend**
+/// for a coin spent after the target (`coins_unspent`). Callers assembling this struct should ensure
+/// `coins_deleted + coins_unspent == modified_coins.len()` when every modified coin is accounted for once.
+///
+/// # Requirement: API-006
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RollbackResult {
+    /// Affected coin IDs → post-rollback–relevant [`CoinRecord`] snapshot (deleted or un-spent row).
+    pub modified_coins: HashMap<CoinId, CoinRecord>,
+    /// Coins removed from the store (created strictly after the rollback target height).
+    pub coins_deleted: usize,
+    /// Coins whose `spent_height` was cleared (were spent strictly after target height).
+    pub coins_unspent: usize,
+    /// Chain tip height after rollback (equals target height on success).
+    pub new_height: u64,
+}
 
 /// Placeholder — API-007 (`CoinStoreStats`).
 #[derive(Debug, Clone, Default)]

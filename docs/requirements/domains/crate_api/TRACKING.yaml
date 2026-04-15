@@ -81,22 +81,22 @@ items:
     status: verified
     spec_ref: "docs/requirements/domains/crate_api/specs/API-005.md"
     tests:
-      - vv_req_api_005_block_data_all_nine_fields_accessible
-      - vv_req_api_005_block_data_empty_hints_and_none_state_root
-      - vv_req_api_005_block_data_expected_state_root_some
-      - vv_req_api_005_coin_addition_all_three_fields_accessible
-      - vv_req_api_005_coin_id_mismatch_still_constructible_until_blk_validation
-      - vv_req_api_005_serde_bincode_roundtrip_block_data
-      - vv_req_api_005_serde_bincode_roundtrip_coin_addition
-    notes: "Defined in src/types.rs; pub use at crate root. Serde+PartialEq for tests and STO-008 path. Integration tests from API-005 spec deferred to BLK-*."
+      - tests/api_005_tests.rs
+    notes: >
+      BlockData: 9 public fields (height, timestamp, block_hash, parent_hash, additions, removals, coinbase_coins, hints, expected_state_root).
+      CoinAddition: coin_id, coin, same_as_parent; CoinAddition::from_coin. Crate-root pub use. Bincode derives for STO-008 path.
 
   - id: API-006
     section: "Result Types"
     summary: "ApplyBlockResult and RollbackResult structs"
-    status: draft
+    status: verified
     spec_ref: "docs/requirements/domains/crate_api/specs/API-006.md"
-    tests: []
-    notes: "ApplyBlockResult: state_root, coins_created, coins_spent, height. RollbackResult: modified_coins HashMap, coins_deleted, coins_unspent, new_height."
+    tests:
+      - tests/api_006_tests.rs
+    notes: >
+      ApplyBlockResult / RollbackResult: NORMATIVE fields + Serialize/Deserialize. CoinStore::apply_block,
+      rollback_to_block, rollback_n_blocks: signatures + NotInitialized gate + BLK/RBK stubs (StorageError prefix)
+      until pipelines ship.
 
   - id: API-007
     section: "Statistics"
