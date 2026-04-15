@@ -102,21 +102,21 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 ## Phase 8: Concurrency
 
 - [x] CON-001 — `CoinStore` is `Send + Sync`
-- [ ] CON-002 — RwLock strategy (shared reads, exclusive writes)
-- [ ] CON-003 — MVCC reads during block application (snapshot isolation)
-- [ ] CON-004 — Parallel removal validation via in-memory unspent set
+- [x] CON-002 — RwLock strategy (shared reads, exclusive writes)
+- [x] CON-003 — MVCC reads during block application (snapshot isolation)
+- [x] CON-004 — Parallel removal validation via in-memory unspent set
 
 ## Phase 9: Performance & Scalability
 
-- [ ] PRF-001 — In-memory unspent set (`HashSet<CoinId>`)
-- [ ] PRF-002 — LRU coin record cache
-- [ ] PRF-003 — Materialized aggregate counters (unspent_count, total_value)
-- [ ] PRF-004 — Unspent-only puzzle hash index
-- [ ] PRF-005 — Tiered spent coin archival (hot/archive/prune)
-- [ ] PRF-006 — Snapshot-based fast sync (checkpoint snapshots with Merkle root verification)
-- [ ] PRF-007 — Height-partitioned indices
-- [ ] PRF-008 — Snapshot/restore persistence (save, load, prune)
-- [ ] PRF-009 — Performance benchmark targets (11 criterion benchmarks from SPEC 13.12)
+- [x] PRF-001 — In-memory unspent set (`HashSet<CoinId>`)
+- [x] PRF-002 — LRU coin record cache
+- [x] PRF-003 — Materialized aggregate counters (unspent_count, total_value)
+- [x] PRF-004 — Unspent-only puzzle hash index
+- [x] PRF-005 — Tiered spent coin archival (hot/archive/prune)
+- [x] PRF-006 — Snapshot-based fast sync (checkpoint snapshots with Merkle root verification)
+- [x] PRF-007 — Height-partitioned indices
+- [x] PRF-008 — Snapshot/restore persistence (save, load, prune)
+- [x] PRF-009 — Performance benchmark targets (11 criterion benchmarks from SPEC 13.12)
 
 ---
 
