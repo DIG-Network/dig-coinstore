@@ -91,6 +91,13 @@ pub mod coin_store;
 /// See: docs/requirements/domains/crate_api/specs/API-003.md
 pub mod config;
 
+// API-003: expose config surface at crate root (see also `storage::StorageBackend` trait).
+pub use config::{
+    default_storage_backend_for_features, CoinStoreConfig, StorageBackend,
+    BLOOM_FILTER_BITS_PER_KEY, DEFAULT_LMDB_MAP_SIZE, DEFAULT_MAX_QUERY_RESULTS,
+    DEFAULT_MAX_SNAPSHOTS, DEFAULT_ROCKSDB_MAX_OPEN_FILES, DEFAULT_ROCKSDB_WRITE_BUFFER_SIZE,
+};
+
 /// Error types for all coinstore operations.
 /// See: docs/requirements/domains/crate_api/specs/API-004.md
 pub mod error;

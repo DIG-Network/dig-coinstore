@@ -153,10 +153,12 @@ fn vv_req_str_003_height_keys_sort_correctly() {
 #[cfg(feature = "rocksdb-storage")]
 #[test]
 fn vv_req_str_003_rocksdb_put_get_delete() {
+    use dig_coinstore::config::CoinStoreConfig;
     use dig_coinstore::storage::{rocksdb::RocksDbBackend, schema, StorageBackend};
 
     let dir = tempfile::tempdir().unwrap();
-    let backend = RocksDbBackend::open(dir.path()).unwrap();
+    let cfg = CoinStoreConfig::default_with_path(dir.path());
+    let backend = RocksDbBackend::open(&cfg).unwrap();
 
     // Put a value.
     backend
@@ -187,10 +189,12 @@ fn vv_req_str_003_rocksdb_put_get_delete() {
 #[cfg(feature = "rocksdb-storage")]
 #[test]
 fn vv_req_str_003_rocksdb_batch_write() {
+    use dig_coinstore::config::CoinStoreConfig;
     use dig_coinstore::storage::{rocksdb::RocksDbBackend, schema, StorageBackend, WriteBatch};
 
     let dir = tempfile::tempdir().unwrap();
-    let backend = RocksDbBackend::open(dir.path()).unwrap();
+    let cfg = CoinStoreConfig::default_with_path(dir.path());
+    let backend = RocksDbBackend::open(&cfg).unwrap();
 
     let mut batch = WriteBatch::new();
     batch.put(schema::CF_METADATA, b"k1", b"v1");
@@ -220,10 +224,12 @@ fn vv_req_str_003_rocksdb_batch_write() {
 #[test]
 fn vv_req_str_003_rocksdb_prefix_scan() {
     use chia_protocol::Bytes32;
+    use dig_coinstore::config::CoinStoreConfig;
     use dig_coinstore::storage::{rocksdb::RocksDbBackend, schema, StorageBackend};
 
     let dir = tempfile::tempdir().unwrap();
-    let backend = RocksDbBackend::open(dir.path()).unwrap();
+    let cfg = CoinStoreConfig::default_with_path(dir.path());
+    let backend = RocksDbBackend::open(&cfg).unwrap();
 
     let ph_a = Bytes32::from([0xAAu8; 32]);
     let ph_b = Bytes32::from([0xBBu8; 32]);

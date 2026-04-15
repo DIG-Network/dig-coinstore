@@ -15,7 +15,12 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, WriteBatch as RocksWriteBatch, DB};
+use rocksdb::{
+    BlockBasedOptions, ColumnFamilyDescriptor, IteratorMode, Options,
+    WriteBatch as RocksWriteBatch, DB,
+};
+
+use crate::config::{CoinStoreConfig, BLOOM_FILTER_BITS_PER_KEY};
 
 use super::schema::ALL_COLUMN_FAMILIES;
 use super::{StorageBackend, StorageError, WriteBatch, WriteOp};
@@ -38,23 +43,31 @@ pub struct RocksDbBackend {
 }
 
 impl RocksDbBackend {
-    /// Open (or create) a RocksDB database at the given path.
+    /// Open (or create) a RocksDB database using [`CoinStoreConfig`] tuning.
     ///
-    /// Creates all column families defined in [`ALL_COLUMN_FAMILIES`] if they
-    /// don't already exist. Uses default RocksDB options — bloom filter and
-    /// compaction tuning will be added in STO-004 and STO-006.
+    /// Applies `rocksdb_write_buffer_size`, `rocksdb_max_open_files`, and optional block-based
+    /// bloom filters per API-003 / SPEC §2.6. Column families follow [`ALL_COLUMN_FAMILIES`].
     ///
     /// # Errors
     ///
     /// Returns `StorageError::BackendError` if the database cannot be opened
     /// (e.g., path doesn't exist and can't be created, lock file conflict).
-    pub fn open(path: &Path) -> Result<Self, StorageError> {
+    pub fn open(config: &CoinStoreConfig) -> Result<Self, StorageError> {
+        let path: &Path = config.storage_path.as_path();
+
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
+        opts.set_write_buffer_size(config.rocksdb_write_buffer_size);
+        opts.set_max_open_files(config.rocksdb_max_open_files);
 
-        // Create column family descriptors with default options.
-        // STO-004 and STO-006 will add per-CF bloom filter and compaction config.
+        let mut block_opts = BlockBasedOptions::default();
+        if config.bloom_filter {
+            block_opts.set_bloom_filter(f64::from(BLOOM_FILTER_BITS_PER_KEY), false);
+        }
+        opts.set_block_based_table_factory(&block_opts);
+
+        // Column families share the same block/table factory from `opts` for new CFs.
         let cf_descriptors: Vec<ColumnFamilyDescriptor> = ALL_COLUMN_FAMILIES
             .iter()
             .map(|name| ColumnFamilyDescriptor::new(*name, Options::default()))
