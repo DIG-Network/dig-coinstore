@@ -374,7 +374,8 @@ impl StorageBackend for LmdbBackend {
     }
 
     fn compact(&self, _cf: &str) -> Result<(), StorageError> {
-        // LMDB COW B+trees — no per-CF compaction knob; STO-003 notes this is acceptable.
+        // LMDB COW B+trees — no per-CF compaction knob; **STO-006** explicitly requires this path to stay a
+        // no-op while RocksDB applies Leveled/FIFO policies per CF (`docs/requirements/domains/storage/specs/STO-006.md`).
         Ok(())
     }
 }

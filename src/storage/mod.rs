@@ -25,6 +25,7 @@
 //! **STO-002 (Rocks column families):** [`tests/sto_002_tests.rs`](../../tests/sto_002_tests.rs).
 //! **STO-004 (RocksDB bloom / prefix / L0 pin):** [`tests/sto_004_tests.rs`](../../tests/sto_004_tests.rs).
 //! **STO-005 (WriteBatch atomic + durable commit):** [`tests/sto_005_tests.rs`](../../tests/sto_005_tests.rs).
+//! **STO-006 (RocksDB compaction + per-CF memtable depth):** [`tests/sto_006_tests.rs`](../../tests/sto_006_tests.rs).
 
 #[cfg(feature = "rocksdb-storage")]
 pub mod rocksdb;
@@ -231,5 +232,9 @@ pub trait StorageBackend: Send + Sync {
     fn flush(&self) -> Result<(), StorageError>;
 
     /// Trigger compaction on the specified column family.
+    ///
+    /// **RocksDB (STO-006 / STO-001):** maps to [`rocksdb::DB::compact_range_cf`] for the named logical CF so
+    /// operators can rebuild SST layout after bulk load or bloom changes ([`STO-006.md`](../../docs/requirements/domains/storage/specs/STO-006.md) § Manual Compaction).
+    /// **LMDB (STO-006):** intentionally a no-op — LMDB has no Rocks-style background compaction; see [`super::lmdb`].
     fn compact(&self, cf: &str) -> Result<(), StorageError>;
 }

@@ -108,6 +108,31 @@ pub const STO002_ROCKS_WRITE_BUFFER_BYTES: [usize; 12] = [
 
 const _: () = assert!(ALL_COLUMN_FAMILIES.len() == STO002_ROCKS_WRITE_BUFFER_BYTES.len());
 
+/// Per-column-family RocksDB `max_write_buffer_number` from **STO-006** “Per-CF Write Buffer Allocation”.
+///
+/// **Invariant:** index `i` pairs with `ALL_COLUMN_FAMILIES[i]` and `STO002_ROCKS_WRITE_BUFFER_BYTES[i]`.
+/// High-throughput CFs (`coin_records`, `merkle_nodes`) keep **3** concurrent memtables so bursts can absorb
+/// sync spikes without stalling writers; the rest use **2** per the normative table.
+///
+/// # Requirements: STO-006
+/// # Spec: docs/requirements/domains/storage/specs/STO-006.md
+pub const STO006_ROCKS_MAX_WRITE_BUFFER_NUMBER: [i32; 12] = [
+    3, // coin_records
+    2, // coin_by_puzzle_hash
+    2, // unspent_by_puzzle_hash
+    2, // coin_by_parent
+    2, // coin_by_confirmed_height
+    2, // coin_by_spent_height
+    2, // hints
+    2, // hints_by_value
+    3, // merkle_nodes
+    2, // archive_coin_records
+    2, // state_snapshots
+    2, // metadata
+];
+
+const _: () = assert!(ALL_COLUMN_FAMILIES.len() == STO006_ROCKS_MAX_WRITE_BUFFER_NUMBER.len());
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Key encoding helpers
 // ─────────────────────────────────────────────────────────────────────────────

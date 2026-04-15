@@ -74,10 +74,15 @@ items:
   - id: STO-006
     section: "Compaction Strategy"
     summary: "Level compaction for read CFs, FIFO for append CFs"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/storage/specs/STO-006.md"
-    tests: []
-    notes: ""
+    tests:
+      - tests/sto_006_tests.rs
+    notes: >
+      `column_family_descriptor` applies `sto006_apply_level_compaction_options` vs `sto006_apply_fifo_compaction_options`
+      from `src/storage/rocksdb.rs`; `STO006_ROCKS_MAX_WRITE_BUFFER_NUMBER` in `schema.rs`; FIFO on `archive_coin_records`
+      + `state_snapshots`; LMDB `compact` stays no-op. rust-rocksdb 0.22 `FifoCompactOptions` lacks `allow_compaction`
+      binding (spec calls for false) — documented in code. Open benchmark row for write-stall monitoring remains.
 
   - id: STO-007
     section: "Feature Gates"

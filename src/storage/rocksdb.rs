@@ -6,6 +6,8 @@
 //! [`sto004_bloom_plan_for_column_family`] (matrix) plus an open smoke check.
 //! **STO-005 (WriteBatch + WAL durability):** [`tests/sto_005_tests.rs`](../../tests/sto_005_tests.rs) — atomic
 //! cross-CF batches, failure rollback, `write_opt` with `sync=true` (see [`sto005_batch_write_options`]).
+//! **STO-006 (compaction + memtable depth):** [`tests/sto_006_tests.rs`](../../tests/sto_006_tests.rs) — Level vs FIFO
+//! matrix, normative Level tuning constants, FIFO byte cap, `max_write_buffer_number`, manual `compact`.
 //!
 //! Implements [`StorageBackend`] using RocksDB with **one column family per logical store** from
 //! [`super::schema::ALL_COLUMN_FAMILIES`]. This matches **STO-002** ([`STO-002.md`](../../docs/requirements/domains/storage/specs/STO-002.md)):
@@ -21,7 +23,7 @@
 //! - **Per-CF `Options`:** Each [`ColumnFamilyDescriptor`] carries its own memtable + table factory settings; the DB
 //!   `Options` carry global flags (`create_if_missing`, WAL limits, etc.).
 //!
-//! # Requirements: STR-003, STO-002, STO-004, STO-005
+//! # Requirements: STR-003, STO-002, STO-004, STO-005, STO-006
 //! # Spec: docs/requirements/domains/storage/specs/STO-002.md
 //! # SPEC.md: Section 7.2 (RocksDB Column Families)
 
@@ -50,7 +52,7 @@ use super::schema::{
     CF_ARCHIVE_COIN_RECORDS, CF_COIN_BY_CONFIRMED_HEIGHT, CF_COIN_BY_PARENT,
     CF_COIN_BY_PUZZLE_HASH, CF_COIN_BY_SPENT_HEIGHT, CF_COIN_RECORDS, CF_HINTS, CF_HINTS_BY_VALUE,
     CF_MERKLE_NODES, CF_METADATA, CF_STATE_SNAPSHOTS, CF_UNSPENT_BY_PUZZLE_HASH,
-    STO002_ROCKS_WRITE_BUFFER_BYTES,
+    STO002_ROCKS_WRITE_BUFFER_BYTES, STO006_ROCKS_MAX_WRITE_BUFFER_NUMBER,
 };
 use super::{StorageBackend, StorageError, WriteBatch, WriteOp};
 
@@ -77,10 +79,11 @@ pub struct RocksDbBackend {
 /// `increase_parallelism(4)` (maps to background jobs), periodic `bytes_per_sync` / `wal_bytes_per_sync`,
 /// and `max_total_wal_size` cap. Write-buffer sizing comes from [`CoinStoreConfig`].
 ///
-/// # `max_open_files` vs FIFO (`state_snapshots`)
+/// # `max_open_files` vs FIFO (`archive_coin_records`, `state_snapshots`)
 ///
-/// [`column_family_descriptor`] sets **FIFO** compaction on [`CF_STATE_SNAPSHOTS`](super::schema::CF_STATE_SNAPSHOTS). RocksDB rejects
-/// open unless **`max_open_files == -1`** (“FIFO compaction only supported with max_open_files = -1”).
+/// [`column_family_descriptor`] sets **FIFO** compaction on [`CF_ARCHIVE_COIN_RECORDS`](super::schema::CF_ARCHIVE_COIN_RECORDS)
+/// and [`CF_STATE_SNAPSHOTS`](super::schema::CF_STATE_SNAPSHOTS) (**STO-006**). RocksDB rejects open unless
+/// **`max_open_files == -1`** (“FIFO compaction only supported with max_open_files = -1”).
 /// Therefore this function **always** sets `max_open_files(-1)` and does **not** forward
 /// [`CoinStoreConfig::rocksdb_max_open_files`] (that knob still exists on the config struct for
 /// API-003 parity and for any future non-FIFO layout; see field docs in [`crate::config::CoinStoreConfig`]).
@@ -213,10 +216,106 @@ fn cf_uses_fixed_prefix_32(cf: &str) -> bool {
     )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// STO-006 — compaction style + Level tuning + FIFO byte cap + memtable depth
+// ─────────────────────────────────────────────────────────────────────────────
+// Normative tables: `docs/requirements/domains/storage/specs/STO-006.md`. The helpers below are the
+// **single source of truth** asserted by `tests/sto_006_tests.rs` and applied from [`column_family_descriptor`]
+// so production wiring cannot drift from the documented matrix without failing CI.
+
+/// On-disk byte ceiling for FIFO SSTs before RocksDB evicts oldest files (**STO-006** FIFO table).
+///
+/// Checkpoint / archive CFs are append-mostly; a 1 GiB cap matches the prior `state_snapshots`-only default and
+/// leaves headroom until PRF-008 adds operator-tunable caps.
+pub const STO006_FIFO_MAX_TABLE_FILES_SIZE: u64 = 1024 * 1024 * 1024;
+
+/// Which compaction style **STO-006** assigns to a logical column family name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sto006CompactionStyle {
+    /// Leveled compaction with [`Sto006LevelCompactionParams::NORMATIVE`] knobs.
+    Level,
+    /// FIFO compaction with [`STO006_FIFO_MAX_TABLE_FILES_SIZE`] (append-mostly stores).
+    Fifo,
+}
+
+/// Leveled-compaction tuning shared by every non-FIFO CF (**STO-006** “Level Compaction Configuration”).
+///
+/// These numbers are **normative** (not RocksDB defaults). [`sto006_apply_level_compaction_options`] applies them
+/// verbatim so operators and tests can reason about read amplification vs write stalls from one struct.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Sto006LevelCompactionParams {
+    pub max_bytes_for_level_base: u64,
+    pub max_bytes_for_level_multiplier: f64,
+    pub level0_file_num_compaction_trigger: i32,
+    pub level0_slowdown_writes_trigger: i32,
+    pub level0_stop_writes_trigger: i32,
+    pub target_file_size_base: u64,
+    pub num_levels: i32,
+}
+
+impl Sto006LevelCompactionParams {
+    /// Table from **STO-006.md** § Level Compaction Configuration (MiB triggers, multiplier, L0 gates, levels).
+    pub const NORMATIVE: Self = Self {
+        max_bytes_for_level_base: 256 * 1024 * 1024,
+        max_bytes_for_level_multiplier: 10.0,
+        level0_file_num_compaction_trigger: 4,
+        level0_slowdown_writes_trigger: 20,
+        level0_stop_writes_trigger: 36,
+        target_file_size_base: 64 * 1024 * 1024,
+        num_levels: 7,
+    };
+}
+
+/// **STO-006** compaction style for `cf` (must match [`ALL_COLUMN_FAMILIES`] spelling).
+///
+/// Append-mostly stores (`archive_coin_records`, `state_snapshots`) use FIFO; everything else is Level-tuned for
+/// point / prefix / range workloads per the spec rationale column.
+pub fn sto006_compaction_style_for_cf(cf: &str) -> Sto006CompactionStyle {
+    match cf {
+        CF_ARCHIVE_COIN_RECORDS | CF_STATE_SNAPSHOTS => Sto006CompactionStyle::Fifo,
+        _ => Sto006CompactionStyle::Level,
+    }
+}
+
+/// `max_write_buffer_number` for `cf` — delegates to [`STO006_ROCKS_MAX_WRITE_BUFFER_NUMBER`] by index.
+pub fn sto006_max_write_buffer_number_for_cf(cf: &str) -> i32 {
+    let idx = ALL_COLUMN_FAMILIES
+        .iter()
+        .position(|&n| n == cf)
+        .unwrap_or_else(|| panic!("STO-006: unknown column family name {cf:?}"));
+    STO006_ROCKS_MAX_WRITE_BUFFER_NUMBER[idx]
+}
+
+/// Apply **STO-006** Level compaction parameters to fresh per-CF [`Options`].
+pub fn sto006_apply_level_compaction_options(o: &mut Options) {
+    let p = Sto006LevelCompactionParams::NORMATIVE;
+    o.set_compaction_style(DBCompactionStyle::Level);
+    o.set_max_bytes_for_level_base(p.max_bytes_for_level_base);
+    o.set_max_bytes_for_level_multiplier(p.max_bytes_for_level_multiplier);
+    o.set_level_zero_file_num_compaction_trigger(p.level0_file_num_compaction_trigger);
+    o.set_level_zero_slowdown_writes_trigger(p.level0_slowdown_writes_trigger);
+    o.set_level_zero_stop_writes_trigger(p.level0_stop_writes_trigger);
+    o.set_target_file_size_base(p.target_file_size_base);
+    o.set_num_levels(p.num_levels);
+}
+
+/// Apply **STO-006** FIFO compaction parameters to fresh per-CF [`Options`].
+///
+/// **Binding note (`allow_compaction = false`):** upstream RocksDB exposes `allow_compaction` on FIFO options,
+/// but **rust-rocksdb 0.22** [`FifoCompactOptions`] only binds `set_max_table_files_size`. Pure FIFO without
+/// intra-style compactions is still the dominant behavior for append-only CFs at this cap; document any future
+/// binding upgrade in **STO-006** verification when the crate adds the setter.
+pub fn sto006_apply_fifo_compaction_options(o: &mut Options) {
+    let mut fifo = FifoCompactOptions::default();
+    fifo.set_max_table_files_size(STO006_FIFO_MAX_TABLE_FILES_SIZE);
+    o.set_fifo_compaction_options(&fifo);
+    o.set_compaction_style(DBCompactionStyle::Fifo);
+}
+
 /// Build a [`ColumnFamilyDescriptor`] for one logical store.
 ///
-/// Applies write-buffer sizing, bloom / prefix table options, and compaction style per **STO-002** tables.
-/// `state_snapshots` uses **FIFO** compaction (checkpoint append pattern); all other CFs use **Level**.
+/// Applies write-buffer sizing (**STO-002** + **STO-006** `max_write_buffer_number`), bloom / prefix table options
+/// (**STO-004**), and compaction style (**STO-006**): FIFO for append-mostly archive + snapshots, Level elsewhere.
 fn column_family_descriptor(cf: &str, config: &CoinStoreConfig) -> ColumnFamilyDescriptor {
     let idx = ALL_COLUMN_FAMILIES
         .iter()
@@ -225,6 +324,7 @@ fn column_family_descriptor(cf: &str, config: &CoinStoreConfig) -> ColumnFamilyD
 
     let mut o = Options::default();
     o.set_write_buffer_size(STO002_ROCKS_WRITE_BUFFER_BYTES[idx]);
+    o.set_max_write_buffer_number(STO006_ROCKS_MAX_WRITE_BUFFER_NUMBER[idx]);
 
     if cf_uses_fixed_prefix_32(cf) {
         o.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
@@ -244,14 +344,9 @@ fn column_family_descriptor(cf: &str, config: &CoinStoreConfig) -> ColumnFamilyD
     }
     o.set_block_based_table_factory(&block);
 
-    if cf == CF_STATE_SNAPSHOTS {
-        let mut fifo = FifoCompactOptions::default();
-        // 1 GiB total file size before dropping oldest SSTs — generous for checkpoints until PRF-008 tuning lands.
-        fifo.set_max_table_files_size(1024 * 1024 * 1024);
-        o.set_fifo_compaction_options(&fifo);
-        o.set_compaction_style(DBCompactionStyle::Fifo);
-    } else {
-        o.set_compaction_style(DBCompactionStyle::Level);
+    match sto006_compaction_style_for_cf(cf) {
+        Sto006CompactionStyle::Fifo => sto006_apply_fifo_compaction_options(&mut o),
+        Sto006CompactionStyle::Level => sto006_apply_level_compaction_options(&mut o),
     }
 
     ColumnFamilyDescriptor::new(cf, o)
@@ -411,6 +506,10 @@ impl StorageBackend for RocksDbBackend {
             .map_err(|e| StorageError::BackendError(format!("RocksDB flush error: {}", e)))
     }
 
+    /// Manual compaction on one logical CF (**STO-006** § Manual Compaction, **STO-001** trait surface).
+    ///
+    /// Uses the full key range so RocksDB may merge overlapping SSTs for that CF; unknown `cf` fails before
+    /// touching the engine ([`StorageError::UnknownColumnFamily`]).
     fn compact(&self, cf: &str) -> Result<(), StorageError> {
         let cf_handle = self.cf_handle(cf)?;
         self.db
