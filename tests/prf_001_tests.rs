@@ -201,3 +201,120 @@ fn vv_req_prf_001_multiple_genesis_coins() {
         assert!(store.is_unspent(id), "All 20 genesis coins should be unspent");
     }
 }
+
+/// **PRF-001:** apply_block adds new coins to unspent set and removes spent coins.
+///
+/// This is the critical incremental maintenance test. After apply_block:
+/// - Newly created coins (coinbase + additions) MUST be in the unspent set.
+/// - Spent coins MUST be removed from the unspent set.
+#[cfg(feature = "rocksdb-storage")]
+#[test]
+fn vv_req_prf_001_apply_block_maintains_unspent_set() {
+    let dir = helpers::temp_dir();
+    let mut store = CoinStore::new(dir.path()).unwrap();
+    let genesis_coin = helpers::test_coin(1, 2, 1_000_000);
+    let genesis_id = genesis_coin.coin_id();
+    store
+        .init_genesis(vec![(genesis_coin, false)], 1_700_000_000)
+        .unwrap();
+
+    assert!(store.is_unspent(&genesis_id), "Genesis coin must be unspent");
+
+    // Apply block 1: add a new coin, spend the genesis coin.
+    let new_coin = helpers::test_coin(10, 11, 500);
+    let new_id = new_coin.coin_id();
+    let cb1 = helpers::test_coin(200, 201, 1_750_000_000_000);
+    let cb2 = helpers::test_coin(202, 203, 250_000_000_000);
+    let cb1_id = cb1.coin_id();
+    let cb2_id = cb2.coin_id();
+
+    let block = dig_coinstore::BlockData {
+        height: 1,
+        timestamp: 1_700_000_018,
+        block_hash: helpers::test_hash(0xB1),
+        parent_hash: Bytes32::from([0u8; 32]),
+        additions: vec![dig_coinstore::CoinAddition::from_coin(new_coin, false)],
+        removals: vec![genesis_id],
+        coinbase_coins: vec![cb1, cb2],
+        hints: vec![],
+        expected_state_root: None,
+    };
+    store.apply_block(block).unwrap();
+
+    // Genesis coin was spent — must NOT be in unspent set.
+    assert!(
+        !store.is_unspent(&genesis_id),
+        "Spent genesis coin must be removed from unspent set after apply_block"
+    );
+
+    // New transaction coin must be in unspent set.
+    assert!(
+        store.is_unspent(&new_id),
+        "New addition must be in unspent set after apply_block"
+    );
+
+    // Coinbase coins must be in unspent set.
+    assert!(
+        store.is_unspent(&cb1_id),
+        "Coinbase coin 1 must be in unspent set after apply_block"
+    );
+    assert!(
+        store.is_unspent(&cb2_id),
+        "Coinbase coin 2 must be in unspent set after apply_block"
+    );
+}
+
+/// **PRF-001:** rollback_to_block maintains unspent set correctly.
+///
+/// After rollback:
+/// - Coins deleted (confirmed after target) MUST be removed from unspent set.
+/// - Coins un-spent (spent after target) MUST be re-added to unspent set.
+#[cfg(feature = "rocksdb-storage")]
+#[test]
+fn vv_req_prf_001_rollback_maintains_unspent_set() {
+    let dir = helpers::temp_dir();
+    let mut store = CoinStore::new(dir.path()).unwrap();
+    let genesis_coin = helpers::test_coin(1, 2, 1_000_000);
+    let genesis_id = genesis_coin.coin_id();
+    store
+        .init_genesis(vec![(genesis_coin, false)], 1_700_000_000)
+        .unwrap();
+
+    // Apply block 1: spend genesis, add new coin.
+    let new_coin = helpers::test_coin(10, 11, 500);
+    let new_id = new_coin.coin_id();
+    let block = dig_coinstore::BlockData {
+        height: 1,
+        timestamp: 1_700_000_018,
+        block_hash: helpers::test_hash(0xB1),
+        parent_hash: Bytes32::from([0u8; 32]),
+        additions: vec![dig_coinstore::CoinAddition::from_coin(new_coin, false)],
+        removals: vec![genesis_id],
+        coinbase_coins: vec![
+            helpers::test_coin(200, 201, 1_750_000_000_000),
+            helpers::test_coin(202, 203, 250_000_000_000),
+        ],
+        hints: vec![],
+        expected_state_root: None,
+    };
+    store.apply_block(block).unwrap();
+
+    // After block 1: genesis spent (not in set), new_coin in set.
+    assert!(!store.is_unspent(&genesis_id));
+    assert!(store.is_unspent(&new_id));
+
+    // Rollback to height 0: new_coin deleted, genesis un-spent.
+    store.rollback_to_block(0).unwrap();
+
+    // Genesis coin should be back in the unspent set (un-spent).
+    assert!(
+        store.is_unspent(&genesis_id),
+        "Un-spent genesis coin must be back in unspent set after rollback"
+    );
+
+    // New coin from block 1 should be gone (deleted).
+    assert!(
+        !store.is_unspent(&new_id),
+        "Deleted coin must be removed from unspent set after rollback"
+    );
+}
