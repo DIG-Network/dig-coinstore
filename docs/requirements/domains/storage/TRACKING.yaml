@@ -33,10 +33,16 @@ items:
   - id: STO-003
     section: "Backend Implementations"
     summary: "LMDB backend with 6 named databases"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/storage/specs/STO-003.md"
-    tests: []
-    notes: ""
+    tests:
+      - tests/sto_003_tests.rs
+    notes: >
+      Six physical DBs (coins, coins_by_ph, hints, hints_by_value, snapshots, metadata) with logical
+      CF→DB routing + single-byte multiplex tags in src/storage/lmdb.rs; EnvFlags NO_TLS|NO_READ_AHEAD,
+      max_dbs=8, map_size from CoinStoreConfig. tests/sto_003_tests.rs: open/list six names, dyn trait,
+      MVCC snapshot via long-lived RoTxn, concurrent readers, map_size, reopen, isolation, prefix_scan,
+      MapFull, round-trip all ALL_COLUMN_FAMILIES. StorageError::MapFull added in storage/mod.rs.
 
   - id: STO-004
     section: "Bloom Filter Configuration"

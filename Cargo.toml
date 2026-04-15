@@ -76,6 +76,8 @@ rayon = "1.10"
 [dev-dependencies]
 chia-consensus = "0.26"
 # chia-sdk-test = "0.33"  # TODO: uncomment once chia-sdk-test 0.33 is published
+# heed: integration tests for STO-003 call `Env::open_database` (MVCC snapshot proof); version MUST match `dependencies.heed`.
+heed = "0.20"
 tempfile = "3"
 rand = "0.8"
 hex-literal = "0.4"

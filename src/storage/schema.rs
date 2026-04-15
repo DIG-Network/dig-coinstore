@@ -16,8 +16,10 @@ use chia_protocol::Bytes32;
 // ─────────────────────────────────────────────────────────────────────────────
 // Column family name constants
 // ─────────────────────────────────────────────────────────────────────────────
-// These names are used by both RocksDB (as column families) and LMDB (as
-// named databases). The 12 CFs mirror the SPEC Section 7.2 table exactly.
+// These **logical** names are used by [`StorageBackend`](crate::storage::StorageBackend):
+// RocksDB maps each to its own column family (STO-002); the LMDB backend maps them onto **six**
+// physical LMDB databases with optional in-DB key tags (STO-003 — see `src/storage/lmdb.rs`).
+// The twelve strings mirror SPEC Section 7.2 exactly.
 //
 // Requirement: STO-002 (RocksDB), STO-003 (LMDB)
 
