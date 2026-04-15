@@ -26,6 +26,8 @@
 //! **STO-004 (RocksDB bloom / prefix / L0 pin):** [`tests/sto_004_tests.rs`](../../tests/sto_004_tests.rs).
 //! **STO-005 (WriteBatch atomic + durable commit):** [`tests/sto_005_tests.rs`](../../tests/sto_005_tests.rs).
 //! **STO-006 (RocksDB compaction + per-CF memtable depth):** [`tests/sto_006_tests.rs`](../../tests/sto_006_tests.rs).
+//! **STO-007 (feature gates + factory):** [`tests/sto_007_tests.rs`](../../tests/sto_007_tests.rs); compile-time guard
+//! in [`crate`](../../src/lib.rs) (`compile_error!` when no backend feature).
 
 #[cfg(feature = "rocksdb-storage")]
 pub mod rocksdb;
@@ -34,6 +36,64 @@ pub mod rocksdb;
 pub mod lmdb;
 
 pub mod schema;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STO-007: open concrete backend from configuration
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Open the key-value backend selected by [`crate::config::StorageBackend`] using a full [`crate::config::CoinStoreConfig`].
+///
+/// **Why this exists:** [`crate::coin_store::CoinStore`] needs the same match logic; centralizing it here avoids
+/// drift between the public factory and internal construction, and gives embedders a small API when they only
+/// want `Box<dyn StorageBackend>` without spinning up [`crate::coin_store::CoinStore`].
+///
+/// **Compile-time (STO-007):** [`crate`] refuses to build unless at least one of `rocksdb-storage` or `lmdb-storage`
+/// is enabled. If the **requested** engine was compiled out (e.g. config says RocksDb but crate was built with
+/// `--no-default-features --features lmdb-storage` only), this returns [`StorageError::BackendError`] with a stable
+/// message rather than linking the wrong native library.
+///
+/// # Errors
+///
+/// Propagates [`StorageError`] from the selected backend's `open` implementation, or
+/// [`StorageError::BackendError`] when the engine does not match enabled features.
+///
+/// # Requirement: STO-007
+/// # Spec: docs/requirements/domains/storage/specs/STO-007.md
+pub fn open_storage_backend(
+    engine: crate::config::StorageBackend,
+    config: &crate::config::CoinStoreConfig,
+) -> Result<Box<dyn StorageBackend>, StorageError> {
+    match engine {
+        crate::config::StorageBackend::RocksDb => {
+            #[cfg(feature = "rocksdb-storage")]
+            {
+                Ok(Box::new(rocksdb::RocksDbBackend::open(config)?))
+            }
+            #[cfg(not(feature = "rocksdb-storage"))]
+            {
+                Err(StorageError::BackendError(format!(
+                    "dig-coinstore: StorageBackend::RocksDb requested for path {} but this build does not include \
+                     `rocksdb-storage` (rebuild with `--features rocksdb-storage` or `full-storage`).",
+                    config.storage_path.display()
+                )))
+            }
+        }
+        crate::config::StorageBackend::Lmdb => {
+            #[cfg(feature = "lmdb-storage")]
+            {
+                Ok(Box::new(lmdb::LmdbBackend::open(config)?))
+            }
+            #[cfg(not(feature = "lmdb-storage"))]
+            {
+                Err(StorageError::BackendError(format!(
+                    "dig-coinstore: StorageBackend::Lmdb requested for path {} but this build does not include \
+                     `lmdb-storage` (rebuild with `--features lmdb-storage` or `full-storage`).",
+                    config.storage_path.display()
+                )))
+            }
+        }
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // StorageError

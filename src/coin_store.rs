@@ -20,13 +20,9 @@ use std::path::Path;
 
 use chia_protocol::Bytes32;
 
-use crate::config::{CoinStoreConfig, StorageBackend as ConfiguredEngine};
+use crate::config::CoinStoreConfig;
 use crate::error::CoinStoreError;
 use crate::merkle::{merkle_leaf_hash, SparseMerkleTree};
-#[cfg(feature = "lmdb-storage")]
-use crate::storage::lmdb::LmdbBackend;
-#[cfg(feature = "rocksdb-storage")]
-use crate::storage::rocksdb::RocksDbBackend;
 use crate::storage::schema;
 use crate::storage::{StorageBackend as KvStore, WriteBatch};
 use crate::types::{
@@ -60,7 +56,7 @@ const SNAPSHOT_RESTORE_BATCH_OPS: usize = 50_000;
 /// # Storage
 ///
 /// All persistent state is stored via the [`KvStore`] trait (`storage::StorageBackend`).
-/// The concrete engine comes from [`CoinStoreConfig::backend`] ([`ConfiguredEngine`]) and
+/// The concrete engine comes from [`CoinStoreConfig::backend`] ([`crate::config::StorageBackend`]) and
 /// must match enabled Cargo features (`rocksdb-storage`, `lmdb-storage`).
 ///
 /// # Requirement: API-001
@@ -805,47 +801,10 @@ impl CoinStore {
     // ─────────────────────────────────────────────────────────────────────
 
     /// Open the storage backend selected by [`CoinStoreConfig::backend`].
-    #[cfg(any(feature = "rocksdb-storage", feature = "lmdb-storage"))]
+    ///
+    /// Delegates to [`crate::storage::open_storage_backend`] (STO-007) so the factory and [`CoinStore`] cannot diverge.
     fn open_backend(config: &CoinStoreConfig) -> Result<Box<dyn KvStore>, CoinStoreError> {
-        match config.backend {
-            ConfiguredEngine::RocksDb => {
-                #[cfg(feature = "rocksdb-storage")]
-                {
-                    Ok(Box::new(RocksDbBackend::open(config)?))
-                }
-                #[cfg(not(feature = "rocksdb-storage"))]
-                {
-                    Err(CoinStoreError::StorageError(
-                        "CoinStoreConfig.backend is RocksDb but the crate was built without \
-                         `rocksdb-storage`."
-                            .into(),
-                    ))
-                }
-            }
-            ConfiguredEngine::Lmdb => {
-                #[cfg(feature = "lmdb-storage")]
-                {
-                    Ok(Box::new(LmdbBackend::open(config)?))
-                }
-                #[cfg(not(feature = "lmdb-storage"))]
-                {
-                    Err(CoinStoreError::StorageError(
-                        "CoinStoreConfig.backend is Lmdb but the crate was built without \
-                         `lmdb-storage`."
-                            .into(),
-                    ))
-                }
-            }
-        }
-    }
-
-    /// Fallback when no storage backend feature is enabled.
-    #[cfg(not(any(feature = "rocksdb-storage", feature = "lmdb-storage")))]
-    fn open_backend(_config: &CoinStoreConfig) -> Result<Box<dyn KvStore>, CoinStoreError> {
-        Err(CoinStoreError::StorageError(
-            "No storage backend enabled. Enable 'rocksdb-storage' or 'lmdb-storage' feature."
-                .to_string(),
-        ))
+        crate::storage::open_storage_backend(config.backend, config).map_err(Into::into)
     }
 
     /// Encode [`CoinRecord`] the same way [`Self::restore`] will write `coin_records` values.

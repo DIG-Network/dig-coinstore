@@ -77,6 +77,18 @@ pub use dig_clvm::CoinState;
 /// Not re-exported by dig-clvm, so imported directly from chia-protocol.
 pub use chia_protocol::CoinStateFilters;
 
+// STO-007: at least one storage backend feature must be enabled so `rocksdb` / `heed` stay optional
+// dependencies and backend modules are never half-linked. Without this, `cargo build --no-default-features`
+// would compile an unusable crate (no `RocksDbBackend` / `LmdbBackend` symbols).
+//
+// Spec: docs/requirements/domains/storage/specs/STO-007.md — "Compile-Time Validation"
+#[cfg(not(any(feature = "rocksdb-storage", feature = "lmdb-storage")))]
+compile_error!(
+    "dig-coinstore: enable at least one storage backend Cargo feature: \
+     `rocksdb-storage` and/or `lmdb-storage`, or `full-storage` for both. \
+     The default package features include `rocksdb-storage`."
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Top-level modules
 // ─────────────────────────────────────────────────────────────────────────────
@@ -144,6 +156,12 @@ pub mod archive;
 /// Backend modules are feature-gated: `rocksdb-storage`, `lmdb-storage`.
 /// See: docs/requirements/domains/storage/specs/
 pub mod storage;
+
+/// Open a concrete [`storage::StorageBackend`] for the engine in [`config::CoinStoreConfig::backend`].
+///
+/// **STO-007:** runtime factory when one or both backends are compiled (`full-storage`); callers that only need
+/// the KV layer (not [`coin_store::CoinStore`]) use this entry point. See [`storage::open_storage_backend`].
+pub use storage::open_storage_backend;
 
 /// Sparse Merkle tree for state root computation and proofs.
 /// See: docs/requirements/domains/merkle/specs/
