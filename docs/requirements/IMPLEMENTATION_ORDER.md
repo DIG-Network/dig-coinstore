@@ -42,7 +42,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 
 ## Phase 3: Merkle Tree
 
-- [ ] MRK-001 — Sparse Merkle tree with batch insert/update/remove
+- [x] MRK-001 — Sparse Merkle tree with batch insert/update/remove
 - [ ] MRK-002 — Memoized empty hash array (257 levels, OnceLock)
 - [ ] MRK-003 — Persistent internal nodes (merkle_nodes column family)
 - [ ] MRK-004 — Proof generation (`get_coin_proof`)

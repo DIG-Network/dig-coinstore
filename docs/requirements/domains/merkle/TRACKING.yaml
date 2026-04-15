@@ -6,10 +6,25 @@ items:
   - id: MRK-001
     section: "Sparse Merkle Tree"
     summary: "SparseMerkleTree with batch_insert, batch_update, batch_remove, root(); deferred recomputation; 256-level tree"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/merkle/specs/MRK-001.md"
-    tests: []
-    notes: ""
+    tests:
+      - tests/mrk_001_tests.rs
+      - vv_req_mrk_001_empty_tree_root_standalone
+      - vv_req_mrk_001_batch_insert_single
+      - vv_req_mrk_001_batch_insert_multiple
+      - vv_req_mrk_001_batch_insert_hundred_single_root_call
+      - vv_req_mrk_001_batch_update
+      - vv_req_mrk_001_insert_then_remove_equals_empty
+      - vv_req_mrk_001_insert_remove_without_intervening_root_still_empty_commitment
+      - vv_req_mrk_001_deferred_recomputation
+      - vv_req_mrk_001_idempotent_root
+      - vv_req_mrk_001_duplicate_insert_error
+      - vv_req_mrk_001_remove_missing_error
+      - vv_req_mrk_001_batch_update_missing_key_error
+      - vv_req_mrk_001_256_level_depth
+      - vv_req_mrk_001_idempotent_update
+    notes: "Production: `src/merkle/mod.rs` (`SparseMerkleTree`, `MerkleError`, domain-separated hashes, `empty_hash` integration). STR-004 proves the type is on the crate surface via `tests/str_004_tests.rs`."
 
   - id: MRK-002
     section: "Sparse Merkle Tree"
