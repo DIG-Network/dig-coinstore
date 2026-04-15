@@ -14,26 +14,26 @@ items:
   - id: HNT-002
     section: "Idempotent Insertion"
     summary: "Duplicate (coin_id, hint) pairs silently ignored via insert-or-ignore semantics"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/hints/specs/HNT-002.md"
-    tests: []
-    notes: ""
+    tests: ["tests/hnt_002_tests.rs"]
+    notes: "add_hint() on CoinStore with idempotency check (forward key exists → no-op). 6 tests."
 
   - id: HNT-003
     section: "Bidirectional Indices"
     summary: "Forward (coin_id+hint) and reverse (hint+coin_id) KV composite-key indices"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/hints/specs/HNT-003.md"
-    tests: []
-    notes: ""
+    tests: ["tests/hnt_003_tests.rs"]
+    notes: "add_hint() writes both CF_HINTS (forward) and CF_HINTS_BY_VALUE (reverse). 4 tests."
 
   - id: HNT-004
     section: "Hint Queries"
     summary: "get_coin_ids_by_hint, get_coin_ids_by_hints batch, get_hints_for_coin_ids, count_hints"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/hints/specs/HNT-004.md"
-    tests: []
-    notes: ""
+    tests: ["tests/hnt_004_tests.rs"]
+    notes: "Four query methods on CoinStore via prefix_scan on CF_HINTS / CF_HINTS_BY_VALUE. 8 tests."
 
   - id: HNT-005
     section: "Rollback Cleanup"

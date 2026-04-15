@@ -135,6 +135,16 @@ impl From<StorageError> for CoinStoreError {
     }
 }
 
+impl From<crate::hints::HintError> for CoinStoreError {
+    fn from(err: crate::hints::HintError) -> Self {
+        match err {
+            crate::hints::HintError::HintTooLong { length, max } => {
+                CoinStoreError::HintTooLong { length, max }
+            }
+        }
+    }
+}
+
 impl From<bincode::Error> for CoinStoreError {
     fn from(err: bincode::Error) -> Self {
         CoinStoreError::SerializationError(err.to_string())
