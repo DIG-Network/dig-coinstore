@@ -6,10 +6,10 @@ items:
   - id: HNT-001
     section: "Hint Validation"
     summary: "Empty hints silently skipped, hints > 32 bytes rejected with HintTooLong, only 32-byte hints eligible"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/hints/specs/HNT-001.md"
-    tests: []
-    notes: ""
+    tests: ["tests/hnt_001_tests.rs"]
+    notes: "validate_hint() function, HintAction enum, HintError type, MAX_HINT_LENGTH constant. 8 tests."
 
   - id: HNT-002
     section: "Idempotent Insertion"

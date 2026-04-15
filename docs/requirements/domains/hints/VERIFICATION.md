@@ -2,7 +2,7 @@
 
 | ID | Status | Summary | Verification Approach |
 |----|--------|---------|----------------------|
-| [HNT-001](NORMATIVE.md#HNT-001) | :x: | Hint validation (empty skip, >32 reject) | Tests: empty hint skipped, oversized rejected with HintTooLong, 32-byte accepted. |
+| [HNT-001](NORMATIVE.md#HNT-001) | :white_check_mark: | Hint validation (empty skip, >32 reject) | 8 tests in `hnt_001_tests.rs`: constant, empty skip, 33/64-byte reject, 1/16/31/32-byte accept. |
 | [HNT-002](NORMATIVE.md#HNT-002) | :x: | Idempotent hint insertion | Tests: duplicate (coin_id, hint) pair silently ignored, no duplicates in store. |
 | [HNT-003](NORMATIVE.md#HNT-003) | :x: | Bidirectional KV indices | Tests: forward lookup by coin_id, reverse lookup by hint, composite key structure. |
 | [HNT-004](NORMATIVE.md#HNT-004) | :x: | Hint query functions | Tests: single hint lookup, batch lookup, reverse lookup by coin_ids, count. |
