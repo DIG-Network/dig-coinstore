@@ -21,9 +21,17 @@
 //! on the next call to `root()`. This ensures at most one expensive tree
 //! traversal per block, regardless of how many coins are modified.
 //!
-//! # Requirements: STR-004, MRK-001, MRK-002
+//! # Persistent internal nodes (MRK-003)
+//!
+//! After [`SparseMerkleTree::root`] recomputes from leaves, the implementation records which
+//! `(level, path)` internal rows differ from the canonical empty subtree so
+//! [`SparseMerkleTree::flush_to_batch`] can append `merkle_nodes` puts/deletes plus the metadata
+//! root row in one [`crate::storage::WriteBatch`]. See [`persistent`](persistent) and
+//! `docs/requirements/domains/merkle/specs/MRK-003.md`.
+//!
+//! # Requirements: STR-004, MRK-001, MRK-002, MRK-003
 //! # Spec: docs/requirements/domains/merkle/specs/MRK-001.md
-//! # SPEC.md: Section 9 (Merkle Tree)
+//! # SPEC.md: Section 9 (Merkle Tree), Section 13.4 (Persistent Merkle Tree)
 
 pub mod persistent;
 pub mod proof;
@@ -33,6 +41,11 @@ use std::sync::OnceLock;
 
 use chia_protocol::Bytes32;
 use chia_sha2::Sha256;
+
+use crate::storage::schema;
+use crate::storage::{StorageBackend, WriteBatch};
+
+pub use persistent::{MerkleNodePersistOp, MERKLE_STATE_ROOT_META_KEY};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -164,6 +177,26 @@ pub enum MerkleError {
     /// Attempted to update or remove a key that does not exist.
     #[error("key not found: {0}")]
     KeyNotFound(Bytes32),
+
+    /// `merkle_state_root` metadata row missing during [`SparseMerkleTree::load_from_store`].
+    #[error("persisted merkle state root missing from metadata column family")]
+    PersistedRootMissing,
+
+    /// Metadata root bytes are not a 32-byte [`Bytes32`] wire encoding.
+    #[error("persisted merkle state root has invalid length: {0} bytes (expected 32)")]
+    InvalidPersistedRootLength(usize),
+
+    /// Recomputed root from the provided leaf map does not match the single metadata read (data
+    /// corruption or partial write).
+    #[error("persisted merkle root mismatch: disk={disk:?} recomputed={recomputed:?}")]
+    PersistedRootMismatch {
+        disk: Bytes32,
+        recomputed: Bytes32,
+    },
+
+    /// Backend I/O failure while loading persisted Merkle metadata.
+    #[error("storage error during merkle load: {0}")]
+    Storage(String),
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -186,8 +219,8 @@ pub enum MerkleError {
 /// This is memory-efficient for sparse trees: a tree with 10M coins stores
 /// only 10M leaf entries, not 2^256 nodes.
 ///
-/// # Requirements: MRK-001
-/// # Spec: docs/requirements/domains/merkle/specs/MRK-001.md
+/// # Requirements: MRK-001, MRK-003
+/// # Spec: docs/requirements/domains/merkle/specs/MRK-001.md, specs/MRK-003.md
 /// # SPEC.md: Section 9 (Merkle Tree)
 ///
 /// # Reference
@@ -200,6 +233,15 @@ pub struct SparseMerkleTree {
 
     /// Cached root hash. `None` when dirty (needs recomputation).
     root_hash: Option<Bytes32>,
+
+    /// Pending `merkle_nodes` writes since the last successful [`Self::flush_to_batch`].
+    ///
+    /// **MRK-003:** Populated during [`Self::root`] recomputation (same traversal as MRK-001) so we
+    /// never pay an extra tree walk for persistence. Keys are exactly [`schema::merkle_node_key`]
+    /// outputs (`[u8; 33]`). Values are [`MerkleNodePersistOp::Put`] for non-empty-subtree digests
+    /// or [`MerkleNodePersistOp::Delete`] when the canonical empty hash applies at that `(level,
+    /// path)` — enabling empty-subtree pruning on disk per MRK-003 spec §Behavior item 2.
+    dirty_merkle_nodes: HashMap<[u8; 33], MerkleNodePersistOp>,
 }
 
 impl Default for SparseMerkleTree {
@@ -217,6 +259,7 @@ impl SparseMerkleTree {
         Self {
             leaves: HashMap::new(),
             root_hash: Some(empty_hash(SMT_HEIGHT)),
+            dirty_merkle_nodes: HashMap::new(),
         }
     }
 
@@ -294,15 +337,23 @@ impl SparseMerkleTree {
     /// At each level, bit `depth` of the key determines left (0) or right (1).
     /// Empty subtrees are replaced with pre-computed `empty_hash(height)`.
     ///
-    /// # Requirement: MRK-001
+    /// # Requirement: MRK-001, MRK-003 (dirty map refresh)
     pub fn root(&mut self) -> Bytes32 {
         if let Some(cached) = self.root_hash {
             return cached;
         }
 
-        // Recompute from leaves.
+        // Recompute from leaves and repopulate MRK-003 dirty set in the same traversal.
         let leaf_refs: Vec<(&Bytes32, &Bytes32)> = self.leaves.iter().collect();
-        let root = Self::compute_subtree_hash(&leaf_refs, 0);
+        self.dirty_merkle_nodes.clear();
+        let path_root = Bytes32::default();
+        let root = Self::compute_subtree_hash_core(
+            &leaf_refs,
+            0,
+            &path_root,
+            &mut self.dirty_merkle_nodes,
+            true,
+        );
         self.root_hash = Some(root);
         root
     }
@@ -326,7 +377,14 @@ impl SparseMerkleTree {
             return cached;
         }
         let leaf_refs: Vec<(&Bytes32, &Bytes32)> = self.leaves.iter().collect();
-        Self::compute_subtree_hash(&leaf_refs, 0)
+        let mut sink = HashMap::new();
+        Self::compute_subtree_hash_core(
+            &leaf_refs,
+            0,
+            &Bytes32::default(),
+            &mut sink,
+            false,
+        )
     }
 
     /// Check if the tree has been modified since the last `root()` call.
@@ -354,38 +412,140 @@ impl SparseMerkleTree {
         self.leaves.get(key)
     }
 
+    /// MRK-003: read-only view of pending `merkle_nodes` writes (primarily tests and diagnostics).
+    pub fn dirty_nodes(&self) -> &HashMap<[u8; 33], MerkleNodePersistOp> {
+        &self.dirty_merkle_nodes
+    }
+
+    /// MRK-003: drop pending persistence rows without touching disk.
+    ///
+    /// Normal production flow uses [`Self::flush_to_batch`], which clears dirty after enqueueing
+    /// ops. This helper exists for rollback simulations and tests that need a clean dirty slate
+    /// without committing a batch.
+    pub fn clear_dirty(&mut self) {
+        self.dirty_merkle_nodes.clear();
+    }
+
+    /// MRK-003: enqueue dirty internal nodes plus the metadata state root into `batch`.
+    ///
+    /// **Atomicity:** Callers MUST pass the same [`WriteBatch`] they use for coin-record mutations
+    /// so one [`StorageBackend::batch_write`] satisfies MRK-003 / BLK-014 “all-or-nothing” commits.
+    ///
+    /// **Ordering:** Invokes [`Self::root`] first so the dirty map matches the latest leaf multiset,
+    /// then drains [`Self::dirty_merkle_nodes`] into `merkle_nodes` puts/deletes, then appends the
+    /// metadata root row ([`MERKLE_STATE_ROOT_META_KEY`]).
+    pub fn flush_to_batch(&mut self, batch: &mut WriteBatch) -> Result<(), MerkleError> {
+        let root = self.root();
+        for (key, op) in std::mem::take(&mut self.dirty_merkle_nodes) {
+            match op {
+                MerkleNodePersistOp::Put(h) => {
+                    batch.put(schema::CF_MERKLE_NODES, &key, h.as_ref());
+                }
+                MerkleNodePersistOp::Delete => {
+                    batch.delete(schema::CF_MERKLE_NODES, &key);
+                }
+            }
+        }
+        let meta_key = schema::metadata_key(MERKLE_STATE_ROOT_META_KEY);
+        batch.put(schema::CF_METADATA, &meta_key, root.as_ref());
+        Ok(())
+    }
+
+    /// MRK-003: single metadata `get` for the committed root, then validate against `leaves`.
+    ///
+    /// Performs **exactly one** storage read on [`schema::CF_METADATA`] (no `merkle_nodes` scan),
+    /// matching NORMATIVE MRK-003. Recomputes from `leaves` via [`Self::root_observed`] to detect
+    /// corruption before accepting the disk root into [`Self::root_hash`].
+    pub fn load_from_store(
+        store: &dyn StorageBackend,
+        leaves: HashMap<Bytes32, Bytes32>,
+    ) -> Result<Self, MerkleError> {
+        let meta_key = schema::metadata_key(MERKLE_STATE_ROOT_META_KEY);
+        let disk_bytes = store
+            .get(schema::CF_METADATA, &meta_key)
+            .map_err(|e| MerkleError::Storage(e.to_string()))?
+            .ok_or(MerkleError::PersistedRootMissing)?;
+        if disk_bytes.len() != 32 {
+            return Err(MerkleError::InvalidPersistedRootLength(disk_bytes.len()));
+        }
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&disk_bytes);
+        let disk_root = Bytes32::from(arr);
+
+        let mut tree = Self {
+            leaves,
+            root_hash: None,
+            dirty_merkle_nodes: HashMap::new(),
+        };
+        let recomputed = tree.root_observed();
+        if recomputed != disk_root {
+            return Err(MerkleError::PersistedRootMismatch {
+                disk: disk_root,
+                recomputed,
+            });
+        }
+        tree.root_hash = Some(disk_root);
+        Ok(tree)
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // Internal: recursive subtree hash computation
     // ─────────────────────────────────────────────────────────────────────
 
-    /// Recursively compute the hash of a subtree at the given depth.
+    /// Recursive subtree hash with optional MRK-003 dirty recording.
     ///
-    /// `depth` ranges from 0 (root level) to SMT_HEIGHT (leaf level).
-    /// At depth == SMT_HEIGHT, we're at the leaf level.
-    fn compute_subtree_hash(leaves: &[(&Bytes32, &Bytes32)], depth: usize) -> Bytes32 {
-        // Base case: no leaves in this subtree → empty subtree hash.
+    /// `path` carries the MSB-first prefix (bits `0..depth-1`) identifying the position of the
+    /// current node in the global 256-bit key space. When `record_dirty` is true, every visited
+    /// internal level records a [`MerkleNodePersistOp`] into `dirty_out` (keyed by
+    /// [`schema::merkle_node_key`]). Callers that only need the digest (e.g. MRK-004 sibling
+    /// recomputation) pass `record_dirty: false` and a throwaway map so both recursive children
+    /// can share one writer without moving `Option<&mut HashMap<…>>` twice.
+    fn compute_subtree_hash_core(
+        leaves: &[(&Bytes32, &Bytes32)],
+        depth: usize,
+        path: &Bytes32,
+        dirty_out: &mut HashMap<[u8; 33], MerkleNodePersistOp>,
+        record_dirty: bool,
+    ) -> Bytes32 {
         if leaves.is_empty() {
-            return empty_hash(SMT_HEIGHT - depth);
+            let h = empty_hash(SMT_HEIGHT - depth);
+            if record_dirty {
+                record_merkle_persist_op(dirty_out, depth, path, h);
+            }
+            return h;
         }
 
-        // Base case: at leaf level (depth 256).
         if depth == SMT_HEIGHT {
-            // There should be exactly one leaf at this position.
-            // Return its pre-computed leaf hash (the value stored is already
-            // the leaf hash, not the raw record).
-            return leaves[0].1.to_owned();
+            return *leaves[0].1;
         }
 
-        // Partition leaves by bit `depth` of their key.
-        // Bit 0 = MSB of the first byte.
         let (left, right): (Vec<_>, Vec<_>) = leaves
             .iter()
             .partition(|(key, _)| !Self::get_bit(key, depth));
 
-        let left_hash = Self::compute_subtree_hash(&left, depth + 1);
-        let right_hash = Self::compute_subtree_hash(&right, depth + 1);
+        let path_left = child_path(path, depth, false);
+        let path_right = child_path(path, depth, true);
 
-        merkle_node_hash(&left_hash, &right_hash)
+        let left_hash = Self::compute_subtree_hash_core(
+            &left,
+            depth + 1,
+            &path_left,
+            dirty_out,
+            record_dirty,
+        );
+        let right_hash = Self::compute_subtree_hash_core(
+            &right,
+            depth + 1,
+            &path_right,
+            dirty_out,
+            record_dirty,
+        );
+
+        let node_hash = merkle_node_hash(&left_hash, &right_hash);
+        if record_dirty {
+            record_merkle_persist_op(dirty_out, depth, path, node_hash);
+        }
+        node_hash
     }
 
     /// Get bit `n` of a Bytes32 key (MSB-first ordering).
@@ -397,5 +557,43 @@ impl SparseMerkleTree {
         let byte_index = n / 8;
         let bit_index = 7 - (n % 8); // MSB-first within each byte
         (key.as_ref()[byte_index] >> bit_index) & 1 == 1
+    }
+}
+
+/// Child path for the sparse walk: copy `base` bits `0..depth-1`, clear suffix, then set bit `depth`.
+///
+/// **Invariant:** All keys in the recursive `leaves` slice at `(depth, path)` agree on the first
+/// `depth` bits; `go_right` selects the `1` branch at bit index `depth` (MRK-001 MSB-first rule).
+fn child_path(base: &Bytes32, depth: usize, go_right: bool) -> Bytes32 {
+    let mut arr: [u8; 32] = base.as_ref().try_into().expect("Bytes32 is 32 bytes");
+    for bit in depth..256 {
+        let bi = bit / 8;
+        let bj = 7 - (bit % 8);
+        arr[bi] &= !(1 << bj);
+    }
+    let bi = depth / 8;
+    let bj = 7 - (depth % 8);
+    if go_right {
+        arr[bi] |= 1 << bj;
+    }
+    Bytes32::from(arr)
+}
+
+/// Queue one `merkle_nodes` row for flush (MRK-003 empty-subtree pruning).
+fn record_merkle_persist_op(
+    dirty: &mut HashMap<[u8; 33], MerkleNodePersistOp>,
+    depth: usize,
+    path: &Bytes32,
+    hash: Bytes32,
+) {
+    if depth >= SMT_HEIGHT {
+        return;
+    }
+    let key = schema::merkle_node_key(depth as u8, path);
+    let empty = empty_hash(SMT_HEIGHT - depth);
+    if hash == empty {
+        dirty.insert(key, MerkleNodePersistOp::Delete);
+    } else {
+        dirty.insert(key, MerkleNodePersistOp::Put(hash));
     }
 }

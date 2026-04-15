@@ -13,10 +13,12 @@
 //! # Requirements: MRK-004, MRK-005
 //! # Spec: docs/requirements/domains/merkle/specs/MRK-004.md
 
+use std::collections::HashMap;
+
 use chia_protocol::Bytes32;
 use serde::{Deserialize, Serialize};
 
-use super::{empty_hash, merkle_node_hash, SparseMerkleTree, SMT_HEIGHT};
+use super::{child_path, empty_hash, merkle_node_hash, SparseMerkleTree, SMT_HEIGHT};
 
 /// A proof of inclusion or exclusion in the sparse Merkle tree.
 ///
@@ -125,7 +127,20 @@ impl SparseMerkleTree {
 
             // The sibling is the subtree we're NOT descending into.
             let sibling_leaves = if bit { &left_leaves } else { &right_leaves };
-            let sibling_hash = Self::compute_subtree_hash(sibling_leaves, depth + 1);
+            // MSB-first path to the sibling subtree root (must match MRK-001 / MRK-003 traversal).
+            let mut path = Bytes32::default();
+            for d in 0..depth {
+                path = child_path(&path, d, Self::get_bit(key, d));
+            }
+            let sibling_path = child_path(&path, depth, !bit);
+            let mut sink = HashMap::new();
+            let sibling_hash = Self::compute_subtree_hash_core(
+                sibling_leaves,
+                depth + 1,
+                &sibling_path,
+                &mut sink,
+                false,
+            );
             siblings.push(sibling_hash);
 
             // Continue down the path.
