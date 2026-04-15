@@ -303,6 +303,48 @@ impl SparseMerkleTree {
         root
     }
 
+    /// Merkle root for read-only callers (e.g. [`crate::coin_store::CoinStore::stats`] / API-007).
+    ///
+    /// **Why not reuse [`Self::root`]?** `root()` takes `&mut self` to cache the recomputed root when
+    /// the tree is dirty. [`CoinStore::stats`](crate::coin_store::CoinStore::stats) is `&self` in the
+    /// public API ([`docs/resources/SPEC.md`](../../docs/resources/SPEC.md) §3.12), so we expose this
+    /// snapshot path that **does not** write `root_hash` back: dirty trees stay dirty for the next
+    /// mutating `root()` call, but observability still sees the correct digest.
+    ///
+    /// **Complexity:** O(leaves) when dirty (same work as `root()` recompute); O(1) when clean.
+    ///
+    /// # Requirement: API-007 (chain stats), MRK-001
+    #[must_use]
+    pub fn root_readonly(&self) -> Bytes32 {
+        if let Some(cached) = self.root_hash {
+            return cached;
+        }
+        let leaf_refs: Vec<(&Bytes32, &Bytes32)> = self.leaves.iter().collect();
+        Self::compute_subtree_hash(&leaf_refs, 0)
+    }
+
+    /// Read the Merkle root without `&mut self` (for [`crate::coin_store::CoinStore::stats`] and other `&self` APIs).
+    ///
+    /// **Difference vs [`Self::root`]:** [`Self::root`] caches the digest in [`Self::root_hash`] after a
+    /// dirty recompute. This method returns the same mathematical root but **does not** update the cache
+    /// when dirty, so it can run on a shared `&` reference. The next [`Self::root`] call may still pay the
+    /// full recompute cost once a writer mutates the tree.
+    ///
+    /// **Empty tree:** Returns [`empty_hash`](empty_hash)([`SMT_HEIGHT`]) — identical to [`Self::new`]'s
+    /// initial root.
+    ///
+    /// # Requirement: API-007 (stats reads state root), MRK-001
+    pub fn root_observed(&self) -> Bytes32 {
+        if self.leaves.is_empty() {
+            return empty_hash(SMT_HEIGHT);
+        }
+        if let Some(cached) = self.root_hash {
+            return cached;
+        }
+        let leaf_refs: Vec<(&Bytes32, &Bytes32)> = self.leaves.iter().collect();
+        Self::compute_subtree_hash(&leaf_refs, 0)
+    }
+
     /// Check if the tree has been modified since the last `root()` call.
     pub fn is_dirty(&self) -> bool {
         self.root_hash.is_none() && !self.leaves.is_empty()
