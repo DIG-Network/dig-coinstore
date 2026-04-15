@@ -8,7 +8,8 @@
 //!
 //! # Requirements
 //! - **API-002:** [`CoinRecord`], [`ChiaCoinRecord`], [`CoinId`]
-//! - API-005..009: additional types (stubs tracked in those specs)
+//! - **API-005:** [`BlockData`], [`CoinAddition`] (apply-block input shapes)
+//! - API-006..009: additional types (stubs tracked in those specs)
 //!
 //! ## `ChiaCoinRecord` vs `chia_protocol::CoinRecord`
 //!
@@ -212,16 +213,75 @@ impl CoinRecord {
     }
 }
 
-// Placeholder re-exports for modules that import `crate::types::*` (API-005+ will flesh these out).
-// They are `pub` so the module graph compiles; tracked as gaps in IMPLEMENTATION_ORDER.md.
+// ─────────────────────────────────────────────────────────────────────────────
+// Block application input — API-005
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// These types are the **semantic** input to `CoinStore::apply_block()` (BLK-001+). They deliberately
+// exclude CLVM programs, signatures, and raw block bytes: the caller validates the block, runs the
+// generator, and passes extracted additions/removals/hints here. See SPEC.md §2.4 and Chia’s
+// `CoinStore.new_block()` parameter list (`coin_store.py`).
 
-/// Placeholder — API-005 (`BlockData`).
-#[derive(Debug, Clone, Default)]
-pub struct BlockData;
+/// Pre-validated state changes for one block height, consumed by [`crate::coin_store::CoinStore::apply_block`].
+///
+/// # Semantics
+///
+/// - **Not a wire block:** This is a *derived* view after CLVM execution (API-005 Implementation Notes).
+/// - **Validation:** [`crate::coin_store::CoinStore::apply_block`] enforces height, parent hash, reward
+///   counts, uniqueness, hints, and optional state root (BLK-002..009); constructing a [`BlockData`]
+///   value alone does not run those checks.
+///
+/// # Documentation links
+///
+/// - Normative: [`API-005`](../../docs/requirements/domains/crate_api/NORMATIVE.md#API-005)
+/// - Spec + test plan: [`API-005.md`](../../docs/requirements/domains/crate_api/specs/API-005.md)
+/// - Chia reference: <https://github.com/Chia-Network/chia-blockchain/blob/main/chia/full_node/coin_store.py>
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockData {
+    /// Block height; pipeline requires `height == chain_tip + 1` (BLK-002).
+    pub height: u64,
+    /// Unix seconds from the block header (propagated onto new [`CoinRecord`] rows).
+    pub timestamp: u64,
+    /// This block’s header hash (chain tracking / tip updates).
+    pub block_hash: Bytes32,
+    /// Expected parent block hash (must match current tip before apply; BLK-003).
+    pub parent_hash: Bytes32,
+    /// Transaction-created coins plus [`CoinAddition`] metadata (`tx_additions` in Chia).
+    pub additions: Vec<CoinAddition>,
+    /// Coin IDs spent by transactions in this block (`tx_removals` in Chia).
+    pub removals: Vec<CoinId>,
+    /// Block reward outputs (farmer + pool); genesis height uses an empty vec per BLK-004.
+    pub coinbase_coins: Vec<Coin>,
+    /// Hints extracted from `CREATE_COIN` for wallet-style lookups (HNT-*).
+    pub hints: Vec<(CoinId, Bytes32)>,
+    /// When [`Some`], BLK-009 compares the Merkle root after apply to this value.
+    pub expected_state_root: Option<Bytes32>,
+}
 
-/// Placeholder — API-005 (`CoinAddition`).
-#[derive(Debug, Clone, Default)]
-pub struct CoinAddition;
+/// One transaction output: the [`Coin`] being created, its precomputed ID, and FF metadata.
+///
+/// The `same_as_parent` bit mirrors Chia’s `tx_additions` tuple flag: the **caller** decides whether
+/// this coin’s puzzle hash and amount match its parent (singleton fast-forward pattern). That flag
+/// becomes [`CoinRecord::ff_eligible`] at ingestion when `apply_block` runs (BLK-007).
+///
+/// # ID consistency
+///
+/// Callers should set [`CoinAddition::coin_id`] to [`Coin::coin_id()`] on [`CoinAddition::coin`].
+/// The type does not enforce equality at construction; BLK-* validation may reject mismatches once
+/// the pipeline is implemented (see API-005 test plan: `test_coin_id_mismatch_in_addition`).
+///
+/// # Documentation links
+///
+/// - [`API-005.md`](../../docs/requirements/domains/crate_api/specs/API-005.md)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoinAddition {
+    /// Declared coin ID (normally [`Coin::coin_id()`] of [`CoinAddition::coin`]).
+    pub coin_id: CoinId,
+    /// The created coin (parent id, puzzle hash, amount).
+    pub coin: Coin,
+    /// Singleton fast-forward hint: same puzzle hash and amount as parent coin.
+    pub same_as_parent: bool,
+}
 
 /// Placeholder — API-006 (`ApplyBlockResult`).
 #[derive(Debug, Clone, Default)]

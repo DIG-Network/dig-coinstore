@@ -22,7 +22,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 - [x] API-002 — CoinRecord struct (coin, confirmed_height, spent_height, coinbase, timestamp, ff_eligible) + from/to_chia_coin_record() interop
 - [x] API-003 — CoinStoreConfig with builder pattern and defaults
 - [x] API-004 — CoinStoreError enum (15 variants per NORMATIVE API-004)
-- [ ] API-005 — BlockData and CoinAddition structs
+- [x] API-005 — BlockData and CoinAddition structs
 - [ ] API-006 — ApplyBlockResult and RollbackResult structs
 - [ ] API-007 — CoinStoreStats struct
 - [ ] API-008 — CoinStoreSnapshot struct (serde Serialize/Deserialize)
