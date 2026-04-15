@@ -101,10 +101,16 @@ items:
   - id: API-007
     section: "Statistics"
     summary: "CoinStoreStats struct with 9 fields"
-    status: draft
+    status: verified
     spec_ref: "docs/requirements/domains/crate_api/specs/API-007.md"
-    tests: []
-    notes: "Returned by CoinStore::stats(). Covers height, timestamp, counts, totals, state_root, tip_hash, hint_count, snapshot_count."
+    tests:
+      - vv_req_api_007_stats_struct_all_fields_accessible
+      - vv_req_api_007_stats_fresh_store_defaults
+      - vv_req_api_007_stats_after_genesis_three_coins
+      - vv_req_api_007_stats_survives_reopen
+      - vv_req_api_007_stats_clone_round_trip
+      - vv_req_api_007_stats_debug_non_empty
+    notes: "CoinStore::stats(&self); SparseMerkleTree::root_observed for state_root without &mut. Coin counts via coin_records scan + genesis record decode until PRF-003. hint_count/snapshot_count 0 stubs."
 
   - id: API-008
     section: "Snapshot Types"

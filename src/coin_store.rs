@@ -28,7 +28,7 @@ use crate::storage::lmdb::LmdbBackend;
 use crate::storage::rocksdb::RocksDbBackend;
 use crate::storage::schema;
 use crate::storage::{StorageBackend as KvStore, WriteBatch};
-use crate::types::{ApplyBlockResult, BlockData, RollbackResult};
+use crate::types::{ApplyBlockResult, BlockData, CoinRecord, CoinStoreStats, RollbackResult};
 
 /// Metadata keys stored in the `metadata` column family.
 const META_HEIGHT: &[u8] = b"chain_height";
@@ -306,6 +306,124 @@ impl CoinStore {
     /// # Requirement: API-003
     pub fn config(&self) -> &CoinStoreConfig {
         &self.config
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Chain statistics (API-007)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// Aggregate [`CoinStoreStats`] for monitoring and QRY-010 chain-state reads.
+    ///
+    /// **Sources:** `height`, `timestamp`, `tip_hash` mirror in-memory tip metadata; `state_root` uses
+    /// [`SparseMerkleTree::root_readonly`](crate::merkle::SparseMerkleTree::root_readonly) so this stays `&self`
+    /// per [`docs/resources/SPEC.md`](../../docs/resources/SPEC.md) §3.12. `unspent_count`, `spent_count`,
+    /// and `total_unspent_value` are derived from `coin_records` rows (bincode [`CoinRecord`] or the
+    /// temporary genesis byte layout from [`Self::serialize_genesis_record`]) until PRF-003 materialized
+    /// counters replace the scan ([`API-007`](../../docs/requirements/domains/crate_api/specs/API-007.md#performance)).
+    ///
+    /// **`hint_count` / `snapshot_count`:** key counts in [`schema::CF_HINTS`] and [`schema::CF_STATE_SNAPSHOTS`].
+    /// Scan failures log a warning and contribute `0` so stats never panic on I/O.
+    ///
+    /// **Uninitialized store:** Before [`Self::init_genesis`], returns zeros / empty-tree root / zero hashes
+    /// for tip fields matching a fresh open (see `tests/api_007_tests.rs`).
+    ///
+    /// # Requirement: API-007
+    pub fn stats(&self) -> CoinStoreStats {
+        let state_root = self.merkle_tree.root_readonly();
+        let mut unspent_count: u64 = 0;
+        let mut spent_count: u64 = 0;
+        let mut total_unspent_value: u64 = 0;
+
+        if self.initialized {
+            match self.backend.prefix_scan(schema::CF_COIN_RECORDS, &[]) {
+                Ok(entries) => {
+                    for (_key, value) in entries {
+                        if let Some(rec) = Self::decode_coin_record_bytes(&value) {
+                            if rec.spent_height.is_none() {
+                                unspent_count = unspent_count.saturating_add(1);
+                                total_unspent_value =
+                                    total_unspent_value.saturating_add(rec.coin.amount);
+                            } else {
+                                spent_count = spent_count.saturating_add(1);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "stats: coin_records prefix_scan failed; aggregate counts defaulting to 0"
+                    );
+                }
+            }
+        }
+
+        let hint_count = Self::cf_entry_count_u64(&*self.backend, schema::CF_HINTS);
+        let snapshot_count = Self::cf_entry_count_usize(&*self.backend, schema::CF_STATE_SNAPSHOTS);
+
+        CoinStoreStats {
+            height: self.height,
+            timestamp: self.timestamp,
+            unspent_count,
+            spent_count,
+            total_unspent_value,
+            state_root,
+            tip_hash: self.tip_hash,
+            hint_count,
+            snapshot_count,
+        }
+    }
+
+    /// Decode a `coin_records` value written either as bincode [`CoinRecord`] (STO-008 target) or the
+    /// genesis-era fixed layout from [`Self::serialize_genesis_record`].
+    fn decode_coin_record_bytes(bytes: &[u8]) -> Option<CoinRecord> {
+        if let Ok(rec) = bincode::deserialize::<CoinRecord>(bytes) {
+            return Some(rec);
+        }
+        Self::decode_legacy_genesis_coin_record(bytes)
+    }
+
+    /// Legacy 97-byte genesis row: parent(32) + puzzle_hash(32) + amount(8) + confirmed_height(8)
+    /// + spent_height_sentinel(8) + coinbase(1) + timestamp(8). `spent_height == 0` means unspent.
+    fn decode_legacy_genesis_coin_record(bytes: &[u8]) -> Option<CoinRecord> {
+        const LEN: usize = 32 + 32 + 8 + 8 + 8 + 1 + 8;
+        if bytes.len() != LEN {
+            return None;
+        }
+        let parent = Bytes32::from(*<&[u8; 32]>::try_from(&bytes[0..32]).ok()?);
+        let puzzle = Bytes32::from(*<&[u8; 32]>::try_from(&bytes[32..64]).ok()?);
+        let amount = u64::from_le_bytes(bytes[64..72].try_into().ok()?);
+        let confirmed_height = u64::from_le_bytes(bytes[72..80].try_into().ok()?);
+        let spent_raw = u64::from_le_bytes(bytes[80..88].try_into().ok()?);
+        let coinbase = bytes[88] != 0;
+        let timestamp = u64::from_le_bytes(bytes[89..97].try_into().ok()?);
+        let coin = chia_protocol::Coin::new(parent, puzzle, amount);
+        let spent_height = (spent_raw != 0).then_some(spent_raw);
+        let mut rec = CoinRecord::new(coin, confirmed_height, timestamp, coinbase);
+        if let Some(h) = spent_height {
+            rec.spend(h);
+        }
+        Some(rec)
+    }
+
+    fn cf_entry_count_u64(backend: &dyn KvStore, cf: &str) -> u64 {
+        match backend.prefix_scan(cf, &[]) {
+            Ok(entries) => entries.len() as u64,
+            Err(e) => {
+                tracing::warn!(cf, error = %e, "stats: prefix_scan failed; returning 0");
+                0
+            }
+        }
+    }
+
+    fn cf_entry_count_usize(backend: &dyn KvStore, cf: &str) -> usize {
+        match backend.prefix_scan(cf, &[]) {
+            Ok(entries) => entries.len(),
+            Err(e) => {
+                tracing::warn!(cf, error = %e, "stats: prefix_scan failed; returning 0");
+                0
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────

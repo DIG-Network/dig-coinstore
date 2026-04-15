@@ -10,7 +10,8 @@
 //! - **API-002:** [`CoinRecord`], [`ChiaCoinRecord`], [`CoinId`]
 //! - **API-005:** [`BlockData`], [`CoinAddition`]
 //! - **API-006:** [`ApplyBlockResult`], [`RollbackResult`]
-//! - API-007..009: additional types (stubs tracked in those specs)
+//! - **API-007:** [`CoinStoreStats`]
+//! - API-008..009: additional types (stubs tracked in those specs)
 //!
 //! ## `ChiaCoinRecord` vs `chia_protocol::CoinRecord`
 //!
@@ -344,9 +345,39 @@ pub struct RollbackResult {
     pub new_height: u64,
 }
 
-/// Placeholder — API-007 (`CoinStoreStats`).
-#[derive(Debug, Clone, Default)]
-pub struct CoinStoreStats;
+/// Aggregated chain + coinset metrics returned by [`crate::coin_store::CoinStore::stats`] (API-007 / QRY-010).
+///
+/// **Design goal (SPEC §1.6 #18):** eventually all aggregate fields are **O(1)** materialized counters
+/// updated in the same write batch as `apply_block` / rollback ([`docs/resources/SPEC.md`](../../docs/resources/SPEC.md)).
+/// Until PRF-003 lands, [`CoinStore::stats`](crate::coin_store::CoinStore::stats) may derive some fields by
+/// scanning `coin_records` (documented on that method) while still returning this single struct shape.
+///
+/// **Operational use:** dashboards, health checks, and mempool admission logic read one snapshot instead of
+/// issuing multiple Chia-style COUNT queries ([`coin_store.py:96-103`](https://github.com/Chia-Network/chia-blockchain/blob/6e7a4954edccd8ab83fcacf938cfc42ddfcad7f2/chia/full_node/coin_store.py#L96)).
+///
+/// # Requirement: API-007
+/// # Spec: docs/requirements/domains/crate_api/specs/API-007.md
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoinStoreStats {
+    /// Current chain tip height (same source as [`crate::coin_store::CoinStore::height`]).
+    pub height: u64,
+    /// Timestamp (seconds) of the current tip block.
+    pub timestamp: u64,
+    /// Count of coins with [`CoinRecord::spent_height`] == [`None`].
+    pub unspent_count: u64,
+    /// Count of coins with [`CoinRecord::spent_height`] present (historical spends retained).
+    pub spent_count: u64,
+    /// Sum of [`Coin::amount`](crate::Coin::amount) over all unspent [`CoinRecord`] rows.
+    pub total_unspent_value: u64,
+    /// Sparse Merkle root over coin record leaves ([`crate::merkle::SparseMerkleTree`]).
+    pub state_root: Bytes32,
+    /// Header hash of the current tip block.
+    pub tip_hash: Bytes32,
+    /// Rows in the forward hint index ([`crate::storage::schema::CF_HINTS`]).
+    pub hint_count: u64,
+    /// Rows in [`crate::storage::schema::CF_STATE_SNAPSHOTS`] (retained checkpoints).
+    pub snapshot_count: usize,
+}
 
 /// Placeholder — API-008 (`CoinStoreSnapshot`).
 #[derive(Debug, Clone, Default)]
