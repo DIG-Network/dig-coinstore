@@ -52,19 +52,19 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 ## Phase 4: Block Application Pipeline
 
 - [x] BLK-001 — `apply_block()` entry point signature and return type
-- [ ] BLK-002 — Height continuity validation
-- [ ] BLK-003 — Parent hash validation
-- [ ] BLK-004 — Reward coin count assertion (0 at genesis, >= 2 otherwise)
-- [ ] BLK-005 — Removal validation (exists + unspent, pre-mutation)
-- [ ] BLK-006 — Addition validation (no duplicates)
-- [ ] BLK-007 — Coin insertion with FF-eligible tracking (same_as_parent)
-- [ ] BLK-008 — Spend marking with strict count assertion
-- [ ] BLK-009 — State root verification (optional expected_state_root)
-- [ ] BLK-010 — Performance logging (warn > 10s)
-- [ ] BLK-011 — Hint validation in Phase 1 (length check, empty skip, block rejection)
-- [ ] BLK-012 — Hint storage in Phase 2 (WriteBatch, idempotent)
-- [ ] BLK-013 — Merkle tree batch update in Phase 2 (single root recomputation)
-- [ ] BLK-014 — Chain tip atomic commit (height, tip_hash, timestamp swap)
+- [x] BLK-002 — Height continuity validation
+- [x] BLK-003 — Parent hash validation
+- [x] BLK-004 — Reward coin count assertion (0 at genesis, >= 2 otherwise)
+- [x] BLK-005 — Removal validation (exists + unspent, pre-mutation)
+- [x] BLK-006 — Addition validation (no duplicates)
+- [x] BLK-007 — Coin insertion with FF-eligible tracking (same_as_parent)
+- [x] BLK-008 — Spend marking with strict count assertion
+- [x] BLK-009 — State root verification (optional expected_state_root)
+- [x] BLK-010 — Performance logging (warn > 10s)
+- [x] BLK-011 — Hint validation in Phase 1 (length check, empty skip, block rejection)
+- [x] BLK-012 — Hint storage in Phase 2 (WriteBatch, idempotent)
+- [x] BLK-013 — Merkle tree batch update in Phase 2 (single root recomputation)
+- [x] BLK-014 — Chain tip atomic commit (height, tip_hash, timestamp swap)
 
 ## Phase 5: Hint Store
 

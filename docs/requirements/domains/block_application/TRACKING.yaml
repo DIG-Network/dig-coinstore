@@ -14,103 +14,103 @@ items:
   - id: BLK-002
     section: "Height and Chain Continuity"
     summary: "Height continuity: block.height MUST equal self.height() + 1"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-002.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_002_tests.rs"]
+    notes: "5 tests: correct height, too high, too low, duplicate, gap."
 
   - id: BLK-003
     section: "Height and Chain Continuity"
     summary: "Parent hash: block.parent_hash MUST match self.tip_hash(). Zero hash for genesis."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-003.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_003_tests.rs"]
+    notes: "4 tests: correct parent, wrong parent, genesis zero hash, multi-block chaining."
 
   - id: BLK-004
     section: "Reward Coin Assertion"
     summary: "Height 0 has 0 coinbase coins. All others >= MIN_REWARD_COINS_PER_BLOCK (2)."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-004.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_004_tests.rs"]
+    notes: "5 tests: 2 coinbase ok, 0 fails, 1 fails, 3 ok, 5 ok."
 
   - id: BLK-005
     section: "Removal and Addition Validation"
     summary: "Every removal coin_id MUST exist and be unspent. Validated before mutations."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-005.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_005_tests.rs"]
+    notes: "5 tests: valid removal, missing coin, double spend, atomicity, multiple removals."
 
   - id: BLK-006
     section: "Removal and Addition Validation"
     summary: "No addition coin MUST already exist. CoinAlreadyExists error."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-006.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_006_tests.rs"]
+    notes: "4 tests: new additions, existing coin, duplicate within block, coinbase duplicate."
 
   - id: BLK-007
     section: "Coin Mutation"
     summary: "Additions stored with confirmed_height, spent_height=None, timestamp. FF-eligible tracking via same_as_parent."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-007.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_007_tests.rs"]
+    notes: "5 tests: ff_eligible true/false, coinbase always false, confirmed_height, spent_height None."
 
   - id: BLK-008
     section: "Coin Mutation"
     summary: "Spend marking with WHERE guard on unspent + post-mutation count assertion."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-008.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_008_tests.rs"]
+    notes: "4 tests: spend marks height, count matches, unspent index updated, spent height index."
 
   - id: BLK-009
     section: "State Root Verification"
     summary: "If expected_state_root provided, computed root MUST match. StateRootMismatch error."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-009.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_009_tests.rs"]
+    notes: "4 tests: None skips, correct root succeeds, wrong root mismatch, atomicity after mismatch."
 
   - id: BLK-010
     section: "Observability"
     summary: "Block application timed. Warning if elapsed > BLOCK_APPLY_WARN_SECONDS (10s)."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-010.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_010_tests.rs"]
+    notes: "3 tests: timing does not crash, full pipeline with adds/removes, sequential resets."
 
   - id: BLK-011
     section: "Hint Processing"
     summary: "Validate all hints in block.hints during Phase 1. Empty skipped, >32 bytes rejected."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-011.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_011_tests.rs"]
+    notes: "4 tests: valid hints, empty vec, zero-filled skipped, validation before mutations."
 
   - id: BLK-012
     section: "Hint Processing"
     summary: "Store validated hints during Phase 2 in same WriteBatch. Idempotent duplicates."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-012.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_012_tests.rs"]
+    notes: "4 tests: forward index, duplicate idempotent, multiple hints same coin, accumulate across blocks."
 
   - id: BLK-013
     section: "Merkle Tree Update"
     summary: "Batch-update Merkle tree during Phase 2 with batch_insert(). Single root recomputation."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-013.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_013_tests.rs"]
+    notes: "5 tests: root changes after additions, after removals, deterministic, coinbase-only, cumulative."
 
   - id: BLK-014
     section: "Chain Tip and Atomic Commit"
     summary: "Atomically update chain tip metadata in same WriteBatch. Swap in-memory state atomically."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-014.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_014_tests.rs"]
+    notes: "5 tests: height, tip_hash, timestamp, sequential, failure does not update."
