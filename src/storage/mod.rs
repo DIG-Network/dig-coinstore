@@ -21,6 +21,7 @@
 //!
 //! **Verification:** behavioral acceptance for [`StorageBackend`] lives in [`tests/sto_001_tests.rs`](../../tests/sto_001_tests.rs)
 //! (RocksDB by default; run with `--no-default-features --features lmdb-storage` for the LMDB slice).
+//! **STO-003 (six LMDB databases, MVCC, `MapFull`):** [`tests/sto_003_tests.rs`](../../tests/sto_003_tests.rs).
 //! **STO-002 (Rocks column families):** [`tests/sto_002_tests.rs`](../../tests/sto_002_tests.rs).
 
 #[cfg(feature = "rocksdb-storage")]
@@ -48,6 +49,13 @@ pub enum StorageError {
     /// A database I/O or internal error.
     #[error("backend error: {0}")]
     BackendError(String),
+
+    /// LMDB mapped region is full (`MDB_MAP_FULL`); increase [`crate::config::CoinStoreConfig::lmdb_map_size`] and reopen.
+    ///
+    /// # Requirement: STO-003
+    /// # Spec: docs/requirements/domains/storage/specs/STO-003.md
+    #[error("LMDB map full: increase lmdb_map_size and reopen the environment")]
+    MapFull,
 
     /// Serialization or deserialization failure.
     #[error("serialization error: {0}")]
