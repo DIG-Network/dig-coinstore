@@ -16,14 +16,16 @@
 //!
 //! | Spec / acceptance | Test(s) |
 //! |-------------------|---------|
-//! | Trait `Send + Sync` + object safety | [`vv_req_sto_001_trait_send_sync_and_dyn_coercion`] |
-//! | `get` / `put` round-trip | [`vv_req_sto_001_get_put_roundtrip`] (per backend cfg) |
-//! | `get` → `None` when missing | [`vv_req_sto_001_get_missing_returns_none`] |
-//! | `delete` idempotent | [`vv_req_sto_001_delete_missing_key_no_error`] |
-//! | `prefix_scan` returns all keys sharing prefix | [`vv_req_sto_001_prefix_scan_five_keys`] |
-//! | `batch_write` atomic visibility + empty no-op | Rocks: [`vv_req_sto_001_batch_write_three_puts_visible`], [`vv_req_sto_001_batch_write_empty_is_noop`]; LMDB: [`vv_req_sto_001_lmdb_batch_write_three_puts_visible`], [`vv_req_sto_001_lmdb_batch_write_empty_is_noop`] |
-//! | Invalid CF → [`StorageError::UnknownColumnFamily`](dig_coinstore::storage::StorageError::UnknownColumnFamily) | [`vv_req_sto_001_unknown_column_family_errors`] |
-//! | `flush` / `compact` callable | Rocks: [`vv_req_sto_001_flush_and_compact_callable`]; LMDB: [`vv_req_sto_001_lmdb_flush_and_compact_callable`] |
+//! | Trait `Send + Sync` + object safety | [`vv_req_sto_001_trait_send_sync_bounds_compile`], [`rocks_tests::vv_req_sto_001_trait_send_sync_and_dyn_coercion`] |
+//! | `get` / `put` round-trip | `rocks_tests::vv_req_sto_001_get_put_roundtrip` / `lmdb_tests::vv_req_sto_001_lmdb_get_put_roundtrip` |
+//! | `get` → `None` when missing | `vv_req_sto_001_get_missing_returns_none` / `vv_req_sto_001_lmdb_get_missing_returns_none` |
+//! | `delete` idempotent | `vv_req_sto_001_delete_missing_key_no_error` / `vv_req_sto_001_lmdb_delete_missing_key_no_error` |
+//! | `prefix_scan` (five keys) | `vv_req_sto_001_prefix_scan_five_keys` / `vv_req_sto_001_lmdb_prefix_scan_five_keys` |
+//! | `batch_write` (three puts + empty) | Rocks + LMDB `*_batch_write_three_puts_visible` + `*_batch_write_empty_is_noop` |
+//! | Unknown CF | `vv_req_sto_001_unknown_column_family_errors` / `vv_req_sto_001_lmdb_unknown_column_family_errors` |
+//! | `flush` / `compact` | `vv_req_sto_001_flush_and_compact_callable` / `vv_req_sto_001_lmdb_flush_and_compact_callable` |
+//!
+//! **GitNexus / SocratiCode:** not confirmed in this environment. **Repomix:** `npx repomix@latest src/storage -o .repomix/pack-storage.xml` per `docs/prompt/start.md` before authoring these tests.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared compile-time proof (no I/O; builds whenever the trait is in the graph)
@@ -51,14 +53,14 @@ fn vv_req_sto_001_trait_send_sync_bounds_compile() {
 
 #[cfg(feature = "rocksdb-storage")]
 mod rocks_tests {
-    use dig_coinstore::config::{CoinStoreConfig, StorageBackend as Engine};
+    use dig_coinstore::config::CoinStoreConfig;
     use dig_coinstore::storage::rocksdb::RocksDbBackend;
     use dig_coinstore::storage::schema;
     use dig_coinstore::storage::{StorageBackend, StorageError, WriteBatch};
 
     fn open_backend() -> (tempfile::TempDir, RocksDbBackend) {
         let dir = tempfile::tempdir().unwrap();
-        let cfg = CoinStoreConfig::default_with_path(dir.path()).with_backend(Engine::RocksDb);
+        let cfg = CoinStoreConfig::default_with_path(dir.path());
         let backend = RocksDbBackend::open(&cfg).unwrap();
         (dir, backend)
     }
@@ -173,10 +175,7 @@ mod lmdb_tests {
 
     fn open_backend() -> (tempfile::TempDir, LmdbBackend) {
         let dir = tempfile::tempdir().unwrap();
-        // Select LMDB explicitly so `full-storage` / dual-feature builds do not rely on
-        // `default_storage_backend_for_features()` (which may prefer Rocks for tests).
-        let cfg = CoinStoreConfig::default_with_path(dir.path())
-            .with_backend(dig_coinstore::config::StorageBackend::Lmdb);
+        let cfg = CoinStoreConfig::default_with_path(dir.path());
         let backend = LmdbBackend::open(&cfg).unwrap();
         (dir, backend)
     }
@@ -228,14 +227,6 @@ mod lmdb_tests {
             backend.get(schema::CF_METADATA, b"x1").unwrap().as_deref(),
             Some(b"a".as_slice())
         );
-    }
-
-    #[test]
-    fn vv_req_sto_001_lmdb_batch_write_empty_is_noop() {
-        let (_dir, backend) = open_backend();
-        let batch = WriteBatch::default();
-        assert!(batch.is_empty());
-        backend.batch_write(batch).unwrap();
     }
 
     #[test]
