@@ -34,7 +34,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 - [x] STO-001 — Storage trait (backend-agnostic interface)
 - [x] STO-002 — RocksDB backend with column families
 - [x] STO-003 — LMDB backend with named databases
-- [ ] STO-004 — Bloom filter configuration (full bloom + prefix bloom)
+- [x] STO-004 — Bloom filter configuration (full bloom + prefix bloom)
 - [ ] STO-005 — WriteBatch atomic block commits (RocksDB)
 - [ ] STO-006 — Compaction strategy per column family
 - [ ] STO-007 — Feature gates (`lmdb-storage`, `rocksdb-storage`)

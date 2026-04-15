@@ -2,6 +2,8 @@
 //!
 //! **Verification:** [`tests/sto_002_tests.rs`](../../tests/sto_002_tests.rs) (twelve CFs, isolation, reopen,
 //! `dyn` [`StorageBackend`], schema-evolution reopen, write-buffer table alignment).
+//! **STO-004 (bloom / prefix / L0 pin):** [`tests/sto_004_tests.rs`](../../tests/sto_004_tests.rs) exercises
+//! [`sto004_bloom_plan_for_column_family`] (matrix) plus an open smoke check.
 //!
 //! Implements [`StorageBackend`] using RocksDB with **one column family per logical store** from
 //! [`super::schema::ALL_COLUMN_FAMILIES`]. This matches **STO-002** ([`STO-002.md`](../../docs/requirements/domains/storage/specs/STO-002.md)):
@@ -17,7 +19,7 @@
 //! - **Per-CF `Options`:** Each [`ColumnFamilyDescriptor`] carries its own memtable + table factory settings; the DB
 //!   `Options` carry global flags (`create_if_missing`, WAL limits, etc.).
 //!
-//! # Requirements: STR-003, STO-002, STO-005
+//! # Requirements: STR-003, STO-002, STO-004, STO-005
 //! # Spec: docs/requirements/domains/storage/specs/STO-002.md
 //! # SPEC.md: Section 7.2 (RocksDB Column Families)
 
@@ -30,6 +32,16 @@ use rocksdb::{
 };
 
 use crate::config::{CoinStoreConfig, BLOOM_FILTER_BITS_PER_KEY};
+
+/// Memtable prefix-bloom size ratio for puzzle-hash style column families (**STO-004** SHOULD).
+///
+/// Passed to [`Options::set_memtable_prefix_bloom_ratio`] together with a fixed 32-byte
+/// [`rocksdb::SliceTransform::create_fixed_prefix`] so prefix seeks benefit before SST flush.
+/// RocksDB caps the effective bloom bytes at 0.25 × write-buffer internally.
+///
+/// # Spec
+/// [`STO-004.md`](../../docs/requirements/domains/storage/specs/STO-004.md) § Prefix bloom filters.
+pub const STO004_MEMTABLE_PREFIX_BLOOM_RATIO: f64 = 0.1;
 
 use super::schema::ALL_COLUMN_FAMILIES;
 use super::schema::{
@@ -84,6 +96,10 @@ fn db_options_for_open(config: &CoinStoreConfig) -> Options {
     opts.set_wal_bytes_per_sync(1 << 20);
     opts.set_max_total_wal_size(256 * 1024 * 1024);
 
+    // **STO-004 / diagnostics:** ticker-based statistics (e.g. bloom usefulness) are optional signals for
+    // integration tests and operators. Cost is a small amount of CPU; acceptable for coinstore workloads.
+    opts.enable_statistics();
+
     // SST blooms and table factories are configured per column family in [`column_family_descriptor`];
     // the implicit `default` CF keeps RocksDB defaults.
     opts
@@ -91,12 +107,83 @@ fn db_options_for_open(config: &CoinStoreConfig) -> Options {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BloomProfile {
-    /// Block-based bloom (~10 bits/key when enabled via [`CoinStoreConfig::bloom_filter`]).
+    /// Point-lookup CFs: classic SST bloom via [`BlockBasedOptions::set_bloom_filter`] with
+    /// `block_based = false` → `rocksdb_filterpolicy_create_bloom_full` (**STO-004** full bloom, 10 bits/key).
     Full,
-    /// Same bloom bits + fixed 32-byte prefix extractor (puzzle hash / hint leading component).
+    /// Puzzle-hash / hint-prefix CFs: **same** classic full-key bloom (`block_based = false`) as point lookups,
+    /// plus fixed 32-byte prefix extractor + [`STO004_MEMTABLE_PREFIX_BLOOM_RATIO`] on the `Options` object.
+    /// Prefix iteration uses the extractor; the SST filter still uses the full-key policy bit layout RocksDB
+    /// documents for prefix-enabled tables ([`STO-004.md`](../../docs/requirements/domains/storage/specs/STO-004.md)).
     Prefix32,
-    /// No block bloom (sequential / append-heavy CFs per STO-002 table).
+    /// Sequential / range-heavy CFs: **no** SST bloom (STO-004 “None” row).
     None,
+}
+
+/// RocksDB bloom-related knobs for one logical column family (**STO-004**).
+///
+/// This is the **authoritative plan** applied by [`column_family_descriptor`] and asserted by
+/// [`tests/sto_004_tests.rs`](../../tests/sto_004_tests.rs). Keeping it in one place avoids drift between
+/// production `Options`/`BlockBasedOptions` wiring and verification tables.
+///
+/// # Field semantics (rust-rocksdb)
+///
+/// - [`BlockBasedOptions::set_bloom_filter`]: `sst_bloom_uses_block_based_builder == false` selects the
+///   **full-key** bloom implementation (`rocksdb_filterpolicy_create_bloom_full`), matching the normative
+///   STO-004 snippets (both point-lookup and prefix rows use `10, false`).
+/// - [`BlockBasedOptions::set_pin_l0_filter_and_index_blocks_in_cache`]: enabled whenever an SST bloom is
+///   configured, per STO-004 “Pin L0” column.
+/// - [`Options::set_memtable_prefix_bloom_ratio`]: set only for [`BloomProfile::Prefix32`] when global
+///   [`CoinStoreConfig::bloom_filter`] is on (STO-004 SHOULD).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Sto004BloomPlan {
+    /// SST bloom bits/key when enabled; `None` ⇒ do not call [`BlockBasedOptions::set_bloom_filter`].
+    pub sst_bloom_bits_per_key: Option<i32>,
+    /// Second argument to [`BlockBasedOptions::set_bloom_filter`] (full-key vs block-based builder).
+    pub sst_bloom_uses_block_based_builder: bool,
+    /// Whether L0 filter + index blocks stay resident in block cache (STO-004).
+    pub pin_l0_filter_and_index_in_cache: bool,
+    /// Memtable prefix bloom ratio for prefix-style CFs; `None` ⇒ leave RocksDB default (effectively off).
+    pub memtable_prefix_bloom_ratio: Option<f64>,
+}
+
+/// Compute the **STO-004** bloom / memtable / L0-pin plan for `cf` under `config`.
+///
+/// [`column_family_descriptor`] must stay in lockstep with this function — if you add a CF or change a
+/// profile, update **both** and extend [`tests/sto_004_tests.rs`](../../tests/sto_004_tests.rs).
+///
+/// When [`CoinStoreConfig::bloom_filter`] is `false` (**API-003** fast CI path), SST blooms, L0 pinning, and
+/// memtable prefix blooms are all suppressed; fixed prefix extractors for puzzle-hash CFs remain enabled so
+/// [`StorageBackend::prefix_scan`] semantics stay correct.
+pub fn sto004_bloom_plan_for_column_family(cf: &str, config: &CoinStoreConfig) -> Sto004BloomPlan {
+    if !config.bloom_filter {
+        return Sto004BloomPlan {
+            sst_bloom_bits_per_key: None,
+            sst_bloom_uses_block_based_builder: false,
+            pin_l0_filter_and_index_in_cache: false,
+            memtable_prefix_bloom_ratio: None,
+        };
+    }
+
+    match cf_bloom_profile(cf) {
+        BloomProfile::None => Sto004BloomPlan {
+            sst_bloom_bits_per_key: None,
+            sst_bloom_uses_block_based_builder: false,
+            pin_l0_filter_and_index_in_cache: false,
+            memtable_prefix_bloom_ratio: None,
+        },
+        BloomProfile::Full => Sto004BloomPlan {
+            sst_bloom_bits_per_key: Some(BLOOM_FILTER_BITS_PER_KEY),
+            sst_bloom_uses_block_based_builder: false,
+            pin_l0_filter_and_index_in_cache: true,
+            memtable_prefix_bloom_ratio: None,
+        },
+        BloomProfile::Prefix32 => Sto004BloomPlan {
+            sst_bloom_bits_per_key: Some(BLOOM_FILTER_BITS_PER_KEY),
+            sst_bloom_uses_block_based_builder: false,
+            pin_l0_filter_and_index_in_cache: true,
+            memtable_prefix_bloom_ratio: Some(STO004_MEMTABLE_PREFIX_BLOOM_RATIO),
+        },
+    }
 }
 
 fn cf_bloom_profile(cf: &str) -> BloomProfile {
@@ -141,19 +228,17 @@ fn column_family_descriptor(cf: &str, config: &CoinStoreConfig) -> ColumnFamilyD
         o.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
     }
 
+    let plan = sto004_bloom_plan_for_column_family(cf, config);
+    if let Some(ratio) = plan.memtable_prefix_bloom_ratio {
+        o.set_memtable_prefix_bloom_ratio(ratio);
+    }
+
     let mut block = BlockBasedOptions::default();
-    if config.bloom_filter {
-        match cf_bloom_profile(cf) {
-            BloomProfile::None => {}
-            // Whole-key bloom (STO-002 “Full”); second argument `false` = classic full-key filter.
-            BloomProfile::Full => {
-                block.set_bloom_filter(f64::from(BLOOM_FILTER_BITS_PER_KEY), false);
-            }
-            // Prefix-length bloom for 32-byte leading component (puzzle hash / hint prefix).
-            BloomProfile::Prefix32 => {
-                block.set_bloom_filter(f64::from(BLOOM_FILTER_BITS_PER_KEY), true);
-            }
-        }
+    if let Some(bits) = plan.sst_bloom_bits_per_key {
+        block.set_bloom_filter(f64::from(bits), plan.sst_bloom_uses_block_based_builder);
+    }
+    if plan.pin_l0_filter_and_index_in_cache {
+        block.set_pin_l0_filter_and_index_blocks_in_cache(true);
     }
     o.set_block_based_table_factory(&block);
 

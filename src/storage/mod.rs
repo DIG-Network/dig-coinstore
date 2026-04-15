@@ -23,6 +23,7 @@
 //! (RocksDB by default; run with `--no-default-features --features lmdb-storage` for the LMDB slice).
 //! **STO-003 (six LMDB databases, MVCC, `MapFull`):** [`tests/sto_003_tests.rs`](../../tests/sto_003_tests.rs).
 //! **STO-002 (Rocks column families):** [`tests/sto_002_tests.rs`](../../tests/sto_002_tests.rs).
+//! **STO-004 (RocksDB bloom / prefix / L0 pin):** [`tests/sto_004_tests.rs`](../../tests/sto_004_tests.rs).
 
 #[cfg(feature = "rocksdb-storage")]
 pub mod rocksdb;
