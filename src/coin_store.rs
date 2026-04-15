@@ -19,13 +19,15 @@ use std::path::Path;
 
 use chia_protocol::Bytes32;
 
-use crate::config::CoinStoreConfig;
+use crate::config::{CoinStoreConfig, StorageBackend as ConfiguredEngine};
 use crate::error::CoinStoreError;
 use crate::merkle::{merkle_leaf_hash, SparseMerkleTree};
+#[cfg(feature = "lmdb-storage")]
+use crate::storage::lmdb::LmdbBackend;
 #[cfg(feature = "rocksdb-storage")]
 use crate::storage::rocksdb::RocksDbBackend;
 use crate::storage::schema;
-use crate::storage::{StorageBackend, WriteBatch};
+use crate::storage::{StorageBackend as KvStore, WriteBatch};
 
 /// Metadata keys stored in the `metadata` column family.
 const META_HEIGHT: &[u8] = b"chain_height";
@@ -46,15 +48,18 @@ const META_INITIALIZED: &[u8] = b"initialized";
 ///
 /// # Storage
 ///
-/// All persistent state is stored via the [`StorageBackend`] trait.
-/// The concrete backend (RocksDB or LMDB) is selected at compile time
-/// via feature flags.
+/// All persistent state is stored via the [`KvStore`] trait (`storage::StorageBackend`).
+/// The concrete engine comes from [`CoinStoreConfig::backend`] ([`ConfiguredEngine`]) and
+/// must match enabled Cargo features (`rocksdb-storage`, `lmdb-storage`).
 ///
 /// # Requirement: API-001
 /// # Spec: docs/requirements/domains/crate_api/specs/API-001.md
 pub struct CoinStore {
+    /// Effective configuration (path, limits, engine choice). Immutable after open.
+    config: CoinStoreConfig,
+
     /// The storage backend (RocksDB or LMDB).
-    backend: Box<dyn StorageBackend>,
+    backend: Box<dyn KvStore>,
 
     /// In-memory sparse Merkle tree for state root computation.
     /// Persisted incrementally via dirty node flushing (MRK-003).
@@ -113,7 +118,7 @@ impl CoinStore {
         })?;
 
         // Open the storage backend.
-        let backend: Box<dyn StorageBackend> = Self::open_backend(&config)?;
+        let backend: Box<dyn KvStore> = Self::open_backend(&config)?;
 
         // Load persisted state from metadata CF (for re-open scenario).
         let initialized = backend
@@ -149,6 +154,7 @@ impl CoinStore {
         };
 
         Ok(Self {
+            config,
             backend,
             merkle_tree,
             height,
@@ -294,20 +300,55 @@ impl CoinStore {
         !self.initialized
     }
 
+    /// Configuration used to open this store (path, engine, tuning knobs).
+    ///
+    /// # Requirement: API-003
+    pub fn config(&self) -> &CoinStoreConfig {
+        &self.config
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // Internal: backend selection
     // ─────────────────────────────────────────────────────────────────────
 
-    /// Open the storage backend based on feature flags and config.
-    #[cfg(feature = "rocksdb-storage")]
-    fn open_backend(config: &CoinStoreConfig) -> Result<Box<dyn StorageBackend>, CoinStoreError> {
-        let backend = RocksDbBackend::open(&config.storage_path)?;
-        Ok(Box::new(backend))
+    /// Open the storage backend selected by [`CoinStoreConfig::backend`].
+    #[cfg(any(feature = "rocksdb-storage", feature = "lmdb-storage"))]
+    fn open_backend(config: &CoinStoreConfig) -> Result<Box<dyn KvStore>, CoinStoreError> {
+        match config.backend {
+            ConfiguredEngine::RocksDb => {
+                #[cfg(feature = "rocksdb-storage")]
+                {
+                    Ok(Box::new(RocksDbBackend::open(config)?))
+                }
+                #[cfg(not(feature = "rocksdb-storage"))]
+                {
+                    Err(CoinStoreError::StorageError(
+                        "CoinStoreConfig.backend is RocksDb but the crate was built without \
+                         `rocksdb-storage`."
+                            .into(),
+                    ))
+                }
+            }
+            ConfiguredEngine::Lmdb => {
+                #[cfg(feature = "lmdb-storage")]
+                {
+                    Ok(Box::new(LmdbBackend::open(config)?))
+                }
+                #[cfg(not(feature = "lmdb-storage"))]
+                {
+                    Err(CoinStoreError::StorageError(
+                        "CoinStoreConfig.backend is Lmdb but the crate was built without \
+                         `lmdb-storage`."
+                            .into(),
+                    ))
+                }
+            }
+        }
     }
 
     /// Fallback when no storage backend feature is enabled.
     #[cfg(not(any(feature = "rocksdb-storage", feature = "lmdb-storage")))]
-    fn open_backend(_config: &CoinStoreConfig) -> Result<Box<dyn StorageBackend>, CoinStoreError> {
+    fn open_backend(_config: &CoinStoreConfig) -> Result<Box<dyn KvStore>, CoinStoreError> {
         Err(CoinStoreError::StorageError(
             "No storage backend enabled. Enable 'rocksdb-storage' or 'lmdb-storage' feature."
                 .to_string(),
@@ -341,9 +382,7 @@ impl CoinStore {
     /// into a fresh SparseMerkleTree. This is O(N) in the number of coins.
     ///
     /// TODO: MRK-003 will replace this with persistent node loading for O(1) startup.
-    fn rebuild_merkle_tree(
-        backend: &dyn StorageBackend,
-    ) -> Result<SparseMerkleTree, CoinStoreError> {
+    fn rebuild_merkle_tree(backend: &dyn KvStore) -> Result<SparseMerkleTree, CoinStoreError> {
         let mut tree = SparseMerkleTree::new();
 
         // Scan all coin records.

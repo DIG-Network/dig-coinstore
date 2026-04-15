@@ -42,10 +42,20 @@ items:
   - id: API-003
     section: "Core Types"
     summary: "CoinStoreConfig with builder pattern and defaults"
-    status: draft
+    status: verified
     spec_ref: "docs/requirements/domains/crate_api/specs/API-003.md"
-    tests: []
-    notes: "8 fields, Default impl, builder with_* methods, StorageBackend enum (Lmdb, RocksDb)"
+    tests:
+      - vv_req_api_003_defaults_match_spec_table
+      - vv_req_api_003_default_backend_follows_feature_matrix
+      - vv_req_api_003_builder_chaining_sets_all_fields
+      - vv_req_api_003_builder_preserves_unset_fields
+      - vv_req_api_003_config_clone_round_trip
+      - vv_req_api_003_storage_backend_variants_constructible
+      - vv_req_api_003_default_with_path_matches_default_plus_path
+      - vv_req_api_003_coin_store_exposes_effective_config
+      - vv_req_api_003_rocksdb_backend_opens_via_config
+      - vv_req_api_003_lmdb_backend_opens_via_config
+    notes: "config::StorageBackend enum vs storage::StorageBackend trait documented; full LMDB StorageBackend impl (STO-003 seed); RocksDB open uses CoinStoreConfig tuning; CoinStore retains config + config(); LMDB test run with lmdb-storage-only on CI-hostile full-storage Windows link."
 
   - id: API-004
     section: "Error Types"
