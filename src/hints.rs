@@ -104,6 +104,8 @@ pub fn validate_hint(hint: &[u8]) -> Result<HintAction, HintError> {
 // ─────────────────────────────────────────────────────────────────────────────
 // HNT-002: Idempotent hint insertion
 // HNT-004: Hint query methods
+// HNT-005: Rollback hint cleanup
+// HNT-006: Variable-length hint keys
 // ─────────────────────────────────────────────────────────────────────────────
 
 use std::collections::{HashMap, HashSet};
@@ -121,6 +123,19 @@ impl CoinStore {
     /// Writes both the forward index (`CF_HINTS`: `coin_id || hint`) and
     /// reverse index (`CF_HINTS_BY_VALUE`: `hint || coin_id`) with empty values.
     ///
+    /// # Key encoding (HNT-006)
+    ///
+    /// Keys are formed by raw concatenation of the two 32-byte components:
+    /// - Forward key: `coin_id (32 bytes) || hint (variable, 1-32 bytes)` — total 33-64 bytes.
+    /// - Reverse key: `hint (variable, 1-32 bytes) || coin_id (32 bytes)` — total 33-64 bytes.
+    ///
+    /// For the common case of 32-byte hints (e.g., puzzle hashes from `Bytes32`), both keys
+    /// are exactly 64 bytes. Variable-length hints (1-31 bytes) produce shorter keys. Because
+    /// `coin_id` is always a fixed 32 bytes and appears first in the forward key, prefix scans
+    /// on `CF_HINTS` by `coin_id` correctly enumerate all hints for that coin regardless of
+    /// hint length. Reverse prefix scans on `CF_HINTS_BY_VALUE` by hint value work correctly
+    /// when the hint length is known to the caller (see [`get_coin_ids_by_hint_bytes`]).
+    ///
     /// # Idempotency ([SPEC.md §1.5 #14](../../docs/resources/SPEC.md))
     ///
     /// If the forward key already exists, returns `Ok(())` without writing.
@@ -132,7 +147,7 @@ impl CoinStore {
     /// - Empty hint → `Ok(())` (silently skipped).
     /// - Hint > [`MAX_HINT_LENGTH`] → `Err(CoinStoreError::HintTooLong)`.
     ///
-    /// # Requirement: HNT-002
+    /// # Requirement: HNT-002, HNT-006
     /// # Spec: docs/requirements/domains/hints/specs/HNT-002.md
     pub fn add_hint(&self, coin_id: &CoinId, hint: &[u8]) -> Result<(), CoinStoreError> {
         // HNT-001: validate hint length.
@@ -266,5 +281,104 @@ impl CoinStore {
     pub fn count_hints(&self) -> Result<u64, CoinStoreError> {
         let entries = self.backend.prefix_scan(schema::CF_HINTS, &[])?;
         Ok(entries.len() as u64)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HNT-005: Rollback hint cleanup
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Remove all hints for the given coin IDs from both forward and reverse indices.
+    /// Returns the count of (coin_id, hint) pairs removed.
+    /// Called during rollback (RBK-002) to prevent orphaned hint entries.
+    ///
+    /// For each coin_id, this method:
+    /// 1. Prefix-scans `CF_HINTS` with `coin_id` to find all forward keys.
+    /// 2. Extracts the hint portion (bytes after the first 32) from each key.
+    /// 3. Builds the reverse key (`hint || coin_id`) and deletes it from `CF_HINTS_BY_VALUE`.
+    /// 4. Deletes the forward key from `CF_HINTS`.
+    ///
+    /// An empty `coin_ids` slice is a no-op returning 0.
+    /// A coin_id with no hints is silently skipped (contributes 0 to the count).
+    ///
+    /// # Requirement: HNT-005
+    pub fn remove_hints_for_coins(&self, coin_ids: &[CoinId]) -> Result<u64, CoinStoreError> {
+        let mut removed: u64 = 0;
+
+        for coin_id in coin_ids {
+            // Prefix scan the forward index for all keys starting with this coin_id.
+            let entries = self
+                .backend
+                .prefix_scan(schema::CF_HINTS, coin_id.as_ref())?;
+
+            for (fwd_key, _value) in &entries {
+                // Forward key is `coin_id (32 bytes) || hint (1-32 bytes)`.
+                // The hint portion starts at byte 32.
+                if fwd_key.len() <= 32 {
+                    continue; // malformed key, skip
+                }
+                let hint_bytes = &fwd_key[32..];
+
+                // Build reverse key: `hint || coin_id`.
+                let mut rev_key = Vec::with_capacity(hint_bytes.len() + 32);
+                rev_key.extend_from_slice(hint_bytes);
+                rev_key.extend_from_slice(coin_id.as_ref());
+
+                // Delete reverse index entry.
+                self.backend
+                    .delete(schema::CF_HINTS_BY_VALUE, &rev_key)?;
+
+                // Delete forward index entry.
+                self.backend.delete(schema::CF_HINTS, fwd_key)?;
+
+                removed += 1;
+            }
+        }
+
+        Ok(removed)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HNT-006: Variable-length hint key queries
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Look up all coin IDs associated with a variable-length hint.
+    ///
+    /// Unlike [`get_coin_ids_by_hint`] which requires a `Bytes32` (32-byte) hint,
+    /// this method accepts any hint length (1-32 bytes). It performs a prefix scan
+    /// on `CF_HINTS_BY_VALUE` using the raw hint bytes, then extracts the trailing
+    /// 32-byte coin ID from each key.
+    ///
+    /// **Important:** Because keys are raw concatenations, a short hint that is a
+    /// prefix of a longer hint will match *both* in a prefix scan. This method
+    /// filters results to only return entries whose key length equals
+    /// `hint.len() + 32`, ensuring exact-length matching.
+    ///
+    /// For 32-byte hints, prefer [`get_coin_ids_by_hint`] which uses the `Bytes32`
+    /// type for compile-time length safety.
+    ///
+    /// # Requirement: HNT-006
+    pub fn get_coin_ids_by_hint_bytes(
+        &self,
+        hint: &[u8],
+        max_items: usize,
+    ) -> Result<Vec<CoinId>, CoinStoreError> {
+        let entries = self
+            .backend
+            .prefix_scan(schema::CF_HINTS_BY_VALUE, hint)?;
+
+        let expected_key_len = hint.len() + 32;
+        let mut result = Vec::with_capacity(entries.len().min(max_items));
+        for (key, _value) in entries {
+            if result.len() >= max_items {
+                break;
+            }
+            // Only match keys with exact expected length to avoid prefix collisions.
+            if key.len() == expected_key_len {
+                let mut coin_bytes = [0u8; 32];
+                coin_bytes.copy_from_slice(&key[hint.len()..hint.len() + 32]);
+                result.push(CoinId::from(coin_bytes));
+            }
+        }
+        Ok(result)
     }
 }

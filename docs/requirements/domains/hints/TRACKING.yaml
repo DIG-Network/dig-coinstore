@@ -38,15 +38,15 @@ items:
   - id: HNT-005
     section: "Rollback Cleanup"
     summary: "All hints for deleted coins removed from both indices during rollback, no orphans"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/hints/specs/HNT-005.md"
-    tests: []
-    notes: ""
+    tests: ["tests/hnt_005_tests.rs"]
+    notes: "remove_hints_for_coins() on CoinStore: prefix-scans CF_HINTS per coin_id, deletes forward+reverse keys. 8 tests."
 
   - id: HNT-006
     section: "Variable-Length Hint Keys"
     summary: "Support 1-32 byte hints. Padded/length-prefixed keys for non-32-byte. Only 32-byte in include_hinted joins."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/hints/specs/HNT-006.md"
-    tests: []
-    notes: ""
+    tests: ["tests/hnt_006_tests.rs"]
+    notes: "get_coin_ids_by_hint_bytes() with exact-length key filtering. add_hint() doc updated with key encoding. 5 tests."
