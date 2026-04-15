@@ -738,25 +738,284 @@ impl CoinStore {
     // Block application & rollback (API-006 signatures; BLK-001+, RBK-001+ pipelines)
     // ─────────────────────────────────────────────────────────────────────
 
-    /// Apply validated [`BlockData`] to this store.
+    /// Apply validated [`BlockData`] to this store ([SPEC.md §3.2](../../docs/resources/SPEC.md)).
     ///
-    /// **Return type (API-006 / BLK-001):** `Result<ApplyBlockResult, CoinStoreError>`. On success,
-    /// callers receive the new state root and counts; on failure, **no** persistent state change (atomic).
+    /// Orchestrates the full block application pipeline:
+    /// - **Phase 1 — Validation (no writes):** BLK-002 height, BLK-003 parent hash, BLK-004 reward
+    ///   count, BLK-005 removal validity, BLK-006 addition uniqueness, BLK-011 hint validation.
+    /// - **Phase 2 — Mutation (atomic [`WriteBatch`]):** BLK-007 coin insertion, BLK-008 spend marking,
+    ///   BLK-012 hint storage, BLK-013 Merkle update, BLK-014 chain tip commit.
+    /// - **Phase 3 — Observability:** BLK-010 performance logging.
     ///
-    /// **Status:** The full validation + mutation pipeline (BLK-002..014) ships in later requirements.
-    /// Until [`CoinStore::init_genesis`] has run, returns [`CoinStoreError::NotInitialized`]. After
-    /// genesis, returns [`CoinStoreError::StorageError`] with a stable `"apply_block:"` prefix and the
-    /// block height in the message until BLK-001+ wires real behavior (see `tests/api_006_tests.rs`).
+    /// On success returns [`ApplyBlockResult`] with new state root, counts, and height.
+    /// On failure returns the appropriate [`CoinStoreError`] variant and **no** state changes occur.
     ///
-    /// # Requirement: API-006 (type surface), BLK-001 (full behavior)
+    /// # Chia reference ([SPEC.md §1.4](../../docs/resources/SPEC.md))
+    ///
+    /// Corresponds to `CoinStore.new_block()` ([`coin_store.py:105-178`](https://github.com/Chia-Network/chia-blockchain/blob/6e7a4954edccd8ab83fcacf938cfc42ddfcad7f2/chia/full_node/coin_store.py#L105)).
+    ///
+    /// # Requirements: BLK-001 through BLK-014
     pub fn apply_block(&mut self, block: BlockData) -> Result<ApplyBlockResult, CoinStoreError> {
+        let start = std::time::Instant::now();
+
         if !self.initialized {
             return Err(CoinStoreError::NotInitialized);
         }
-        Err(CoinStoreError::StorageError(format!(
-            "apply_block: not implemented - block height {} (BLK-001..BLK-014)",
-            block.height
-        )))
+
+        // ─── Phase 1: Validation (read-only, no mutations) ───────────────
+
+        // BLK-002: Height continuity — block.height must be exactly current + 1.
+        // SPEC.md §1.1 "Chain validation on insert" — defense-in-depth.
+        if block.height != self.height + 1 {
+            return Err(CoinStoreError::HeightMismatch {
+                expected: self.height + 1,
+                got: block.height,
+            });
+        }
+
+        // BLK-003: Parent hash — block.parent_hash must match current tip hash.
+        // Genesis tip is zero hash; subsequent tips are the previous block's hash.
+        if block.parent_hash != self.tip_hash {
+            return Err(CoinStoreError::ParentHashMismatch {
+                expected: self.tip_hash,
+                got: block.parent_hash,
+            });
+        }
+
+        // BLK-004: Reward coin count — genesis (height 1 after init_genesis at 0) needs ≥ 2 coinbase.
+        // Height 0 is handled by init_genesis, so apply_block always gets height ≥ 1.
+        // Chia: coin_store.py:138-141 — `assert len(reward_coins) >= 2` for height > 0.
+        // SPEC.md §2.7: MIN_REWARD_COINS_PER_BLOCK = 2.
+        {
+            let min_rewards = 2usize; // MIN_REWARD_COINS_PER_BLOCK
+            if block.coinbase_coins.len() < min_rewards {
+                return Err(CoinStoreError::InvalidRewardCoinCount {
+                    expected: format!(">= {}", min_rewards),
+                    got: block.coinbase_coins.len(),
+                });
+            }
+        }
+
+        // BLK-005: Removal validation — every removal must exist and be unspent.
+        // Validation occurs BEFORE any mutations (SPEC.md §1.5 #5, §1.3 #5).
+        // Collect existing records for removals so we can mark them spent in Phase 2.
+        let mut removal_records: Vec<CoinRecord> = Vec::with_capacity(block.removals.len());
+        for removal_id in &block.removals {
+            let key = schema::coin_key(removal_id);
+            match self.backend.get(schema::CF_COIN_RECORDS, &key)? {
+                None => return Err(CoinStoreError::CoinNotFound(*removal_id)),
+                Some(bytes) => {
+                    let rec = Self::decode_coin_record_bytes(&bytes).ok_or_else(|| {
+                        CoinStoreError::StorageError(format!(
+                            "apply_block: corrupt coin record for {:?}",
+                            removal_id
+                        ))
+                    })?;
+                    if rec.is_spent() {
+                        return Err(CoinStoreError::DoubleSpend(*removal_id));
+                    }
+                    removal_records.push(rec);
+                }
+            }
+        }
+
+        // BLK-006: Addition validation — no addition coin_id already exists in the store.
+        // Check both transaction additions AND coinbase coins.
+        let mut all_addition_ids: HashSet<Bytes32> = HashSet::new();
+        for addition in &block.additions {
+            if !all_addition_ids.insert(addition.coin_id) {
+                return Err(CoinStoreError::CoinAlreadyExists(addition.coin_id));
+            }
+            let key = schema::coin_key(&addition.coin_id);
+            if self.backend.get(schema::CF_COIN_RECORDS, &key)?.is_some() {
+                return Err(CoinStoreError::CoinAlreadyExists(addition.coin_id));
+            }
+        }
+        for coinbase in &block.coinbase_coins {
+            let cb_id = coinbase.coin_id();
+            if !all_addition_ids.insert(cb_id) {
+                return Err(CoinStoreError::CoinAlreadyExists(cb_id));
+            }
+            let key = schema::coin_key(&cb_id);
+            if self.backend.get(schema::CF_COIN_RECORDS, &key)?.is_some() {
+                return Err(CoinStoreError::CoinAlreadyExists(cb_id));
+            }
+        }
+
+        // BLK-011: Hint validation — hints > 32 bytes reject the block; empty hints are skipped.
+        // SPEC.md §1.5 #13, §2.7 MAX_HINT_LENGTH = 32.
+        for (_, hint) in &block.hints {
+            let hint_len = hint.as_ref().len();
+            if hint_len > 32 {
+                return Err(CoinStoreError::HintTooLong {
+                    length: hint_len,
+                    max: 32,
+                });
+            }
+        }
+
+        // ─── Phase 2: Mutation (atomic WriteBatch) ───────────────────────
+        // All writes go into a single WriteBatch for atomicity (SPEC.md §1.6 #17).
+
+        let mut batch = WriteBatch::new();
+        let mut merkle_inserts: Vec<(Bytes32, Bytes32)> = Vec::new();
+        let mut merkle_updates: Vec<(Bytes32, Bytes32)> = Vec::new();
+        let mut coins_created: usize = 0;
+
+        // BLK-007: Insert coinbase coins — always ff_eligible = false.
+        // Chia: coin_store.py:128 — coinbase coins are never FF-eligible.
+        for coinbase in &block.coinbase_coins {
+            let rec = CoinRecord::new(*coinbase, block.height, block.timestamp, true);
+            let record_bytes = Self::serialize_coin_record_storage_bytes(&rec)?;
+            let coin_id = rec.coin_id();
+            let leaf_hash = merkle_leaf_hash(&record_bytes);
+
+            Self::append_coin_record_to_batch(&mut batch, &rec, &record_bytes);
+            merkle_inserts.push((coin_id, leaf_hash));
+            coins_created += 1;
+        }
+
+        // BLK-007: Insert transaction addition coins — ff_eligible from same_as_parent.
+        // Chia: coin_store.py:128-129 — `same_as_parent=True` → spent_index = -1 (FF-eligible).
+        for addition in &block.additions {
+            let mut rec =
+                CoinRecord::new(addition.coin, block.height, block.timestamp, false);
+            if addition.same_as_parent {
+                rec.ff_eligible = true;
+            }
+            let record_bytes = Self::serialize_coin_record_storage_bytes(&rec)?;
+            let coin_id = rec.coin_id();
+            let leaf_hash = merkle_leaf_hash(&record_bytes);
+
+            Self::append_coin_record_to_batch(&mut batch, &rec, &record_bytes);
+            merkle_inserts.push((coin_id, leaf_hash));
+            coins_created += 1;
+        }
+
+        // BLK-008: Spend marking — mark each removal as spent at block.height.
+        // Update the coin record, remove from unspent puzzle hash index, add to spent height index.
+        // Chia: coin_store.py:627-648 — strict count assertion.
+        let coins_spent = removal_records.len();
+        for rec in &mut removal_records {
+            rec.spend(block.height);
+            let record_bytes = Self::serialize_coin_record_storage_bytes(rec)?;
+            let coin_id = rec.coin_id();
+
+            // Update primary record.
+            let key = schema::coin_key(&coin_id);
+            batch.put(schema::CF_COIN_RECORDS, &key, &record_bytes);
+
+            // Remove from unspent puzzle hash index.
+            let ph_key = schema::puzzle_hash_coin_key(&rec.coin.puzzle_hash, &coin_id);
+            batch.delete(schema::CF_UNSPENT_BY_PUZZLE_HASH, &ph_key);
+
+            // Add to spent height index.
+            let sh_key = schema::height_coin_key(block.height, &coin_id);
+            batch.put(schema::CF_COIN_BY_SPENT_HEIGHT, &sh_key, coin_id.as_ref());
+
+            // Update Merkle leaf with new (spent) record bytes.
+            let leaf_hash = merkle_leaf_hash(&record_bytes);
+            merkle_updates.push((coin_id, leaf_hash));
+        }
+
+        // BLK-012: Hint storage — store validated hints in forward + reverse indices.
+        // SPEC.md §1.5 #14: idempotent insertion (duplicate (coin_id, hint) is a no-op).
+        for (coin_id, hint) in &block.hints {
+            // Skip empty hints (all zeros) per BLK-011.
+            if hint.as_ref() == &[0u8; 32] {
+                continue;
+            }
+            let mut fwd = Vec::with_capacity(64);
+            fwd.extend_from_slice(coin_id.as_ref());
+            fwd.extend_from_slice(hint.as_ref());
+            batch.put(schema::CF_HINTS, &fwd, &[]);
+
+            let mut rev = Vec::with_capacity(64);
+            rev.extend_from_slice(hint.as_ref());
+            rev.extend_from_slice(coin_id.as_ref());
+            batch.put(schema::CF_HINTS_BY_VALUE, &rev, &[]);
+        }
+
+        // BLK-013: Merkle tree batch update — single root recomputation.
+        // SPEC.md §1.6 #7: batch Merkle updates.
+        if !merkle_inserts.is_empty() {
+            self.merkle_tree
+                .batch_insert(&merkle_inserts)
+                .map_err(|e| CoinStoreError::StorageError(format!("Merkle insert: {}", e)))?;
+        }
+        if !merkle_updates.is_empty() {
+            self.merkle_tree
+                .batch_update(&merkle_updates)
+                .map_err(|e| CoinStoreError::StorageError(format!("Merkle update: {}", e)))?;
+        }
+        let state_root = self.merkle_tree.root();
+
+        // BLK-009: State root verification — if expected_state_root is set, verify match.
+        if let Some(expected) = block.expected_state_root {
+            if state_root != expected {
+                // Rollback Merkle tree changes by reconstructing from storage.
+                // This maintains atomicity — no partial Merkle state.
+                self.merkle_tree = Self::rebuild_merkle_tree(&*self.backend)?;
+                return Err(CoinStoreError::StateRootMismatch {
+                    expected,
+                    computed: state_root,
+                });
+            }
+        }
+
+        // BLK-014: Chain tip atomic commit — height, tip_hash, timestamp in the same WriteBatch.
+        batch.put(
+            schema::CF_METADATA,
+            META_HEIGHT,
+            &block.height.to_le_bytes(),
+        );
+        batch.put(
+            schema::CF_METADATA,
+            META_TIP_HASH,
+            block.block_hash.as_ref(),
+        );
+        batch.put(
+            schema::CF_METADATA,
+            META_TIMESTAMP,
+            &block.timestamp.to_le_bytes(),
+        );
+
+        // Atomic commit — all writes in one batch (SPEC.md §1.6 #17).
+        self.backend.batch_write(batch)?;
+
+        // Update in-memory state to match persisted state.
+        self.height = block.height;
+        self.tip_hash = block.block_hash;
+        self.timestamp = block.timestamp;
+
+        // ─── Phase 3: Observability ──────────────────────────────────────
+
+        // BLK-010: Performance logging — warn if > 10s (SPEC.md §1.5 #15, §2.7).
+        let elapsed = start.elapsed();
+        if elapsed.as_secs_f64() > 10.0 {
+            tracing::warn!(
+                height = block.height,
+                additions = coins_created,
+                removals = coins_spent,
+                elapsed_secs = elapsed.as_secs_f64(),
+                "apply_block took > 10s — consider faster storage"
+            );
+        } else {
+            tracing::debug!(
+                height = block.height,
+                additions = coins_created,
+                removals = coins_spent,
+                elapsed_ms = elapsed.as_millis() as u64,
+                "apply_block complete"
+            );
+        }
+
+        Ok(ApplyBlockResult {
+            state_root,
+            coins_created,
+            coins_spent,
+            height: block.height,
+        })
     }
 
     /// Roll the coinstate back to `target_height` (may be negative for full reset per RBK-001).

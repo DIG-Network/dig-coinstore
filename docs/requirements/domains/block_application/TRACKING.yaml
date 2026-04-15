@@ -6,10 +6,10 @@ items:
   - id: BLK-001
     section: "Entry Point"
     summary: "apply_block() accepts BlockData, returns Result<ApplyBlockResult, CoinStoreError>. Atomic."
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/block_application/specs/BLK-001.md"
-    tests: []
-    notes: ""
+    tests: ["tests/blk_001_tests.rs"]
+    notes: "Full pipeline implemented in coin_store.rs. 16 tests cover valid blocks, sequential chaining, all error variants, atomicity, and state root verification."
 
   - id: BLK-002
     section: "Height and Chain Continuity"

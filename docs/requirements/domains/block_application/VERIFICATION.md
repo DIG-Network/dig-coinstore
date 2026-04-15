@@ -2,7 +2,7 @@
 
 | ID | Status | Summary | Verification Approach |
 |----|--------|---------|----------------------|
-| [BLK-001](NORMATIVE.md#BLK-001) | -- | apply_block() entry point, atomic semantics | Tests: signature compiles, valid block applies, failure rolls back all mutations, return type matchable. |
+| [BLK-001](NORMATIVE.md#BLK-001) | ✅ | apply_block() entry point, atomic semantics | 16 tests in `blk_001_tests.rs`: signature, valid block, sequential blocks, height mismatch, parent hash, reward count, coin not found, double spend, duplicate addition, atomicity on failure, state root, ff_eligible, removal marks spent, not initialized. |
 | [BLK-002](NORMATIVE.md#BLK-002) | -- | Height continuity check | Tests: sequential height succeeds, gap rejected, regression rejected, height=0 genesis case. |
 | [BLK-003](NORMATIVE.md#BLK-003) | -- | Parent hash verification | Tests: correct parent hash succeeds, wrong hash rejected, genesis zero hash accepted. |
 | [BLK-004](NORMATIVE.md#BLK-004) | -- | Reward coin count assertion | Tests: genesis with 0 coinbase passes, genesis with coinbase rejected, non-genesis with >=2 passes, non-genesis with <2 rejected. |
