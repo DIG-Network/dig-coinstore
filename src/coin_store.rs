@@ -682,7 +682,8 @@ impl CoinStore {
 
     /// Decode a `coin_records` value written either as bincode [`CoinRecord`] (STO-008 target) or the
     /// genesis-era fixed layout from [`Self::serialize_legacy_coin_record`].
-    fn decode_coin_record_bytes(bytes: &[u8]) -> Option<CoinRecord> {
+    /// Used by queries (QRY-*) and stats to read records from any era.
+    pub(crate) fn decode_coin_record_bytes(bytes: &[u8]) -> Option<CoinRecord> {
         // STO-008 normative bincode (fixint + BE) first, then legacy default bincode (`ff_eligible` rows),
         // then the fixed 97-byte genesis tuple ([`Self::decode_legacy_genesis_coin_record`]).
         if let Ok(rec) = crate::storage::kv_bincode::decode_coin_record_storage(bytes) {

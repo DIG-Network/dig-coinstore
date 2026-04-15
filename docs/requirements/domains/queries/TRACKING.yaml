@@ -6,42 +6,42 @@ items:
   - id: QRY-001
     section: "Point Lookups"
     summary: "get_coin_record() and get_coin_records() point lookups by coin ID"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/queries/specs/QRY-001.md"
-    tests: []
-    notes: ""
+    tests: ["tests/qry_001_tests.rs"]
+    notes: "5 tests: existing coin, missing coin, spent coin, batch mixed, empty batch."
 
   - id: QRY-002
     section: "Puzzle Hash Queries"
     summary: "get_coin_records_by_puzzle_hash(es) with include_spent, start_height, end_height"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/queries/specs/QRY-002.md"
-    tests: []
-    notes: ""
+    tests: ["tests/qry_002_tests.rs"]
+    notes: "5 tests: include_spent true/false, height range, no match, batch."
 
   - id: QRY-003
     section: "Height Queries"
     summary: "get_coins_added_at_height() and get_coins_removed_at_height(), height 0 removed returns empty"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/queries/specs/QRY-003.md"
-    tests: []
-    notes: ""
+    tests: ["tests/qry_003_tests.rs"]
+    notes: "5 tests: genesis coins, block 1 additions, removals at height 1, height 0 empty, nonexistent height."
 
   - id: QRY-004
     section: "Parent ID Queries"
     summary: "get_coin_records_by_parent_ids() with include_spent, height range"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/queries/specs/QRY-004.md"
-    tests: []
-    notes: ""
+    tests: ["tests/qry_004_tests.rs"]
+    notes: "4 tests: by parent, no match, include_spent false, multiple parents."
 
   - id: QRY-005
     section: "Name Queries"
     summary: "get_coin_records_by_names() by coin IDs with include_spent, height range"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/queries/specs/QRY-005.md"
-    tests: []
-    notes: ""
+    tests: ["tests/qry_005_tests.rs"]
+    notes: "4 tests: include_spent true/false, height range, empty names."
 
   - id: QRY-006
     section: "Coin State Queries"

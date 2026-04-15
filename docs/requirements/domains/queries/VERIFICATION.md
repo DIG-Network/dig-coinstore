@@ -2,11 +2,11 @@
 
 | ID | Status | Summary | Verification Approach |
 |----|--------|---------|----------------------|
-| [QRY-001](NORMATIVE.md#QRY-001) | :x: | Point lookups by coin ID | Tests: single lookup, batch lookup, missing coin returns None. |
-| [QRY-002](NORMATIVE.md#QRY-002) | :x: | Puzzle hash queries with filtering | Tests: include_spent filter, height range, batch puzzle hashes. |
-| [QRY-003](NORMATIVE.md#QRY-003) | :x: | Height-based addition/removal queries | Tests: coins added at height, coins removed at height, height 0 removal empty. |
-| [QRY-004](NORMATIVE.md#QRY-004) | :x: | Parent ID queries | Tests: by parent IDs, include_spent, height range filtering. |
-| [QRY-005](NORMATIVE.md#QRY-005) | :x: | Name queries with filtering | Tests: by coin IDs with include_spent and height range. |
+| [QRY-001](NORMATIVE.md#QRY-001) | :white_check_mark: | Point lookups by coin ID | 5 tests in `qry_001_tests.rs`: existing, missing, spent, batch mixed, empty. |
+| [QRY-002](NORMATIVE.md#QRY-002) | :white_check_mark: | Puzzle hash queries with filtering | 5 tests in `qry_002_tests.rs`: include_spent true/false, height range, no match, batch. |
+| [QRY-003](NORMATIVE.md#QRY-003) | :white_check_mark: | Height-based addition/removal queries | 5 tests in `qry_003_tests.rs`: genesis, block 1, removals, height 0 empty, nonexistent. |
+| [QRY-004](NORMATIVE.md#QRY-004) | :white_check_mark: | Parent ID queries | 4 tests in `qry_004_tests.rs`: by parent, no match, include_spent false, multiple parents. |
+| [QRY-005](NORMATIVE.md#QRY-005) | :white_check_mark: | Name queries with filtering | 4 tests in `qry_005_tests.rs`: include_spent true/false, height range, empty names. |
 | [QRY-006](NORMATIVE.md#QRY-006) | :x: | Lightweight CoinState queries | Tests: by IDs, by puzzle hashes, CoinState struct correctness. |
 | [QRY-007](NORMATIVE.md#QRY-007) | :x: | Batch coin state pagination | Tests: batch size limit, hinted join, dedup, min_amount, sort order, block boundary, pagination detection. |
 | [QRY-008](NORMATIVE.md#QRY-008) | :x: | Singleton lineage lookup | Tests: exactly one match returns info, zero/multiple matches return None. |

@@ -77,11 +77,11 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 
 ## Phase 6: Queries
 
-- [ ] QRY-001 — `get_coin_record()` and `get_coin_records()` (by ID, batch)
-- [ ] QRY-002 — `get_coin_records_by_puzzle_hash()` and `get_coin_records_by_puzzle_hashes()`
-- [ ] QRY-003 — `get_coins_added_at_height()` and `get_coins_removed_at_height()`
-- [ ] QRY-004 — `get_coin_records_by_parent_ids()`
-- [ ] QRY-005 — `get_coin_records_by_names()` (with include_spent, height range)
+- [x] QRY-001 — `get_coin_record()` and `get_coin_records()` (by ID, batch)
+- [x] QRY-002 — `get_coin_records_by_puzzle_hash()` and `get_coin_records_by_puzzle_hashes()`
+- [x] QRY-003 — `get_coins_added_at_height()` and `get_coins_removed_at_height()`
+- [x] QRY-004 — `get_coin_records_by_parent_ids()`
+- [x] QRY-005 — `get_coin_records_by_names()` (with include_spent, height range)
 - [ ] QRY-006 — `get_coin_states_by_ids()` and `get_coin_states_by_puzzle_hashes()`
 - [ ] QRY-007 — `batch_coin_states_by_puzzle_hashes()` with `CoinStateFilters` from chia-protocol (pagination, block boundary, dedup, min_amount)
 - [ ] QRY-008 — `get_unspent_lineage_info_for_puzzle_hash()` (singleton FF support)
