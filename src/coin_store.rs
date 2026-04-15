@@ -15,7 +15,7 @@
 //! # Spec: docs/requirements/domains/crate_api/specs/API-001.md
 //! # SPEC.md: Section 3.1
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use chia_protocol::Bytes32;
@@ -30,7 +30,8 @@ use crate::storage::rocksdb::RocksDbBackend;
 use crate::storage::schema;
 use crate::storage::{StorageBackend as KvStore, WriteBatch};
 use crate::types::{
-    ApplyBlockResult, BlockData, CoinRecord, CoinStoreSnapshot, CoinStoreStats, RollbackResult,
+    ApplyBlockResult, BlockData, CoinId, CoinRecord, CoinStoreSnapshot, CoinStoreStats,
+    RollbackResult,
 };
 
 /// Metadata keys stored in the `metadata` column family.
@@ -86,6 +87,15 @@ pub struct CoinStore {
 
     /// Whether init_genesis() has been called.
     initialized: bool,
+
+    /// In-memory unspent coin IDs for O(1) [`Self::is_unspent`] (PRF-001 seed; API-010).
+    ///
+    /// **Population:** Filled on [`Self::init_genesis`] for each inserted genesis coin, rebuilt from disk
+    /// when reopening an initialized store ([`Self::with_config`]), and replaced from [`CoinStoreSnapshot`]
+    /// on [`Self::restore`]. BLK-008+ will remove IDs on spend and re-insert on rollback.
+    ///
+    /// # Requirement: API-010 (public `is_unspent`), PRF-001 (full incremental maintenance)
+    unspent_ids: HashSet<CoinId>,
 }
 
 impl CoinStore {
@@ -163,6 +173,12 @@ impl CoinStore {
             SparseMerkleTree::new()
         };
 
+        let unspent_ids = if initialized {
+            Self::rebuild_unspent_ids_from_backend(&*backend)?
+        } else {
+            HashSet::new()
+        };
+
         Ok(Self {
             config,
             backend,
@@ -171,6 +187,7 @@ impl CoinStore {
             tip_hash,
             timestamp,
             initialized,
+            unspent_ids,
         })
     }
 
@@ -267,6 +284,11 @@ impl CoinStore {
         self.timestamp = timestamp;
         self.initialized = true;
 
+        self.unspent_ids.clear();
+        for (coin, _) in &initial_coins {
+            self.unspent_ids.insert(coin.coin_id());
+        }
+
         Ok(state_root)
     }
 
@@ -312,6 +334,20 @@ impl CoinStore {
     /// # Requirement: API-003
     pub fn config(&self) -> &CoinStoreConfig {
         &self.config
+    }
+
+    /// Returns `true` if `coin_id` is present in the in-memory unspent set (API-010; PRF-001).
+    ///
+    /// **Semantics:** `true` only when the ID was inserted after [`Self::init_genesis`], [`Self::restore`],
+    /// or store reopen (same decode rules as [`Self::stats`]). `false` covers spent rows, unknown coins, and
+    /// coins not yet reflected until BLK mutates this set on spend.
+    ///
+    /// **Performance:** Single [`HashSet::contains`] — no storage I/O, no extra mutex beyond future CON-002
+    /// `RwLock` wrapping the whole [`CoinStore`] (API-010 implementation notes).
+    ///
+    /// # Requirement: API-010
+    pub fn is_unspent(&self, coin_id: &CoinId) -> bool {
+        self.unspent_ids.contains(coin_id)
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -565,6 +601,14 @@ impl CoinStore {
         self.tip_hash = snapshot.block_hash;
         self.timestamp = snapshot.timestamp;
         self.initialized = true;
+
+        self.unspent_ids = snapshot
+            .coins
+            .values()
+            .filter(|r| r.spent_height.is_none())
+            .map(|r| r.coin_id())
+            .collect();
+
         Ok(())
     }
 
@@ -720,16 +764,23 @@ impl CoinStore {
     /// deleted / un-spent counts vs Chia's raw map alone ([`RollbackResult`]).
     ///
     /// **Status:** Rollback scan + Merkle rebuild (RBK-002..007) are not wired yet. Without genesis,
-    /// returns [`CoinStoreError::NotInitialized`]. Otherwise returns [`CoinStoreError::StorageError`]
-    /// with a `"rollback_to_block:"` prefix.
+    /// returns [`CoinStoreError::NotInitialized`]. If `target_height` is strictly greater than
+    /// [`Self::height`], returns [`CoinStoreError::RollbackAboveTip`] (API-010). Otherwise returns
+    /// [`CoinStoreError::StorageError`] with a `"rollback_to_block:"` prefix until RBK ships.
     ///
-    /// # Requirement: API-006 (type surface), RBK-001 (full behavior)
+    /// # Requirement: API-006 (type surface), API-010 (`RollbackAboveTip`), RBK-001 (full behavior)
     pub fn rollback_to_block(
         &mut self,
         target_height: i64,
     ) -> Result<RollbackResult, CoinStoreError> {
         if !self.initialized {
             return Err(CoinStoreError::NotInitialized);
+        }
+        if target_height > self.height as i64 {
+            return Err(CoinStoreError::RollbackAboveTip {
+                target: target_height,
+                current: self.height,
+            });
         }
         Err(CoinStoreError::StorageError(format!(
             "rollback_to_block: not implemented - target_height {target_height} (RBK-001..RBK-007)"
@@ -890,6 +941,29 @@ impl CoinStore {
             backend.delete(schema::CF_STATE_SNAPSHOTS, &key)?;
         }
         Ok(())
+    }
+
+    /// Rebuild [`CoinStore::unspent_ids`] from `coin_records` (startup path for reopened stores).
+    ///
+    /// Uses the same decode predicate as [`Self::stats`] (`spent_height == None` ⇒ unspent). Full PRF-001
+    /// will incrementally maintain this set during BLK/RBK instead of full rescans where possible.
+    fn rebuild_unspent_ids_from_backend(
+        backend: &dyn KvStore,
+    ) -> Result<HashSet<CoinId>, CoinStoreError> {
+        let mut set = HashSet::new();
+        let entries = backend
+            .prefix_scan(schema::CF_COIN_RECORDS, &[])
+            .map_err(|e| {
+                CoinStoreError::StorageError(format!("rebuild_unspent_ids_from_backend: {e}"))
+            })?;
+        for (_key, value) in entries {
+            if let Some(rec) = Self::decode_coin_record_bytes(&value) {
+                if rec.spent_height.is_none() {
+                    set.insert(rec.coin_id());
+                }
+            }
+        }
+        Ok(set)
     }
 
     /// Rebuild the Merkle tree from persisted coin records.
