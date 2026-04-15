@@ -1,0 +1,7 @@
+{
+  "name": "dig-coinstore",
+  "private": true,
+  "devDependencies": {
+    "gitnexus": "^1.6.1"
+  }
+}
