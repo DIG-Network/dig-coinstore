@@ -1,0 +1,5 @@
+# Rust build artifacts (must never be committed — large native libs under target/debug)
+/target/
+
+# Repomix output packs (regenerate locally per docs/prompt/start.md)
+/.repomix/
