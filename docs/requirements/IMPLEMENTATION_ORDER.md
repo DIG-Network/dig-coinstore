@@ -82,12 +82,12 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 - [x] QRY-003 — `get_coins_added_at_height()` and `get_coins_removed_at_height()`
 - [x] QRY-004 — `get_coin_records_by_parent_ids()`
 - [x] QRY-005 — `get_coin_records_by_names()` (with include_spent, height range)
-- [ ] QRY-006 — `get_coin_states_by_ids()` and `get_coin_states_by_puzzle_hashes()`
-- [ ] QRY-007 — `batch_coin_states_by_puzzle_hashes()` with `CoinStateFilters` from chia-protocol (pagination, block boundary, dedup, min_amount)
-- [ ] QRY-008 — `get_unspent_lineage_info_for_puzzle_hash()` (singleton FF support)
-- [ ] QRY-009 — Aggregate queries (`num_unspent`, `total_unspent_value`, `aggregate_unspent_by_puzzle_hash`)
-- [ ] QRY-010 — Chain state queries (`height`, `tip_hash`, `state_root`, `stats`, `is_empty`)
-- [ ] QRY-011 — Large input batching (chunk slices by DEFAULT_LOOKUP_BATCH_SIZE)
+- [x] QRY-006 — `get_coin_states_by_ids()` and `get_coin_states_by_puzzle_hashes()`
+- [x] QRY-007 — `batch_coin_states_by_puzzle_hashes()` with `CoinStateFilters` from chia-protocol (pagination, block boundary, dedup, min_amount)
+- [x] QRY-008 — `get_unspent_lineage_info_for_puzzle_hash()` (singleton FF support)
+- [x] QRY-009 — Aggregate queries (`num_unspent`, `total_unspent_value`, `aggregate_unspent_by_puzzle_hash`)
+- [x] QRY-010 — Chain state queries (`height`, `tip_hash`, `state_root`, `stats`, `is_empty`)
+- [x] QRY-011 — Large input batching (chunk slices by DEFAULT_LOOKUP_BATCH_SIZE)
 
 ## Phase 7: Rollback
 

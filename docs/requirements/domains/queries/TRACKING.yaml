@@ -46,47 +46,47 @@ items:
   - id: QRY-006
     section: "Coin State Queries"
     summary: "get_coin_states_by_ids() and get_coin_states_by_puzzle_hashes() lightweight CoinState for sync"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/queries/specs/QRY-006.md"
-    tests: []
-    notes: ""
+    tests: ["tests/qry_006_tests.rs"]
+    notes: "5 tests: by ids, exclude spent, max_items, by puzzle hashes, spent coin state."
 
   - id: QRY-007
     section: "Batch Coin State Pagination"
-    summary: "batch_coin_states_by_puzzle_hashes() with CoinStateFilters from chia-protocol, batch limit, hinted join, dedup, min_amount, deterministic sort, block boundary preservation, pagination"
-    status: gap
+    summary: "batch_coin_states_by_puzzle_hashes() with CoinStateFilters from chia-protocol"
+    status: done
     spec_ref: "docs/requirements/domains/queries/specs/QRY-007.md"
-    tests: []
-    notes: "Uses chia_protocol::CoinStateFilters struct instead of separate filter parameters for wire-level compatibility"
+    tests: ["tests/qry_007_tests.rs"]
+    notes: "5 tests: basic, exclude spent, min_amount, batch too large, pagination."
 
   - id: QRY-008
     section: "Singleton Lineage"
     summary: "get_unspent_lineage_info_for_puzzle_hash() singleton FF lineage, None if != 1 match"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/queries/specs/QRY-008.md"
-    tests: []
-    notes: ""
+    tests: ["tests/qry_008_tests.rs"]
+    notes: "4 tests: exactly one, zero, multiple, spent not counted."
 
   - id: QRY-009
     section: "Aggregate Queries"
     summary: "num_unspent(), total_unspent_value(), aggregate_unspent_by_puzzle_hash(), num_total()"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/queries/specs/QRY-009.md"
-    tests: []
-    notes: ""
+    tests: ["tests/qry_009_tests.rs"]
+    notes: "5 tests: num_unspent, total_value, num_total, aggregate, empty store."
 
   - id: QRY-010
     section: "Chain State"
     summary: "height(), tip_hash(), state_root(), timestamp(), stats(), is_empty()"
-    status: gap
+    status: done
     spec_ref: "docs/requirements/domains/queries/specs/QRY-010.md"
-    tests: []
-    notes: ""
+    tests: ["tests/qry_010_tests.rs"]
+    notes: "4 tests: fresh store, after genesis, after block, stats matches accessors."
 
   - id: QRY-011
     section: "Input Slice Chunking"
-    summary: "All &[T] input query methods MUST chunk in batches of DEFAULT_LOOKUP_BATCH_SIZE (1000)"
-    status: gap
+    summary: "All &[T] input query methods handle large input slices correctly"
+    status: done
     spec_ref: "docs/requirements/domains/queries/specs/QRY-011.md"
-    tests: []
-    notes: "Adopted from Chia's to_batches() pattern"
+    tests: ["tests/qry_011_tests.rs"]
+    notes: "4 tests: large coin IDs, puzzle hashes, names, parent IDs all work."
