@@ -11,7 +11,7 @@
 //! proof data, the key, and the claimed value (or None for exclusion).
 //!
 //! # Requirements: MRK-004, MRK-005
-//! # Spec: docs/requirements/domains/merkle/specs/MRK-004.md
+//! # Spec: `docs/requirements/domains/merkle/specs/MRK-004.md`, `specs/MRK-005.md`
 
 use std::collections::HashMap;
 
@@ -33,8 +33,8 @@ use super::{child_path, empty_hash, merkle_node_hash, MerkleError, SparseMerkleT
 ///
 /// # Verification
 ///
-/// Given a trusted root hash, call `SparseMerkleProof::verify()` to check
-/// whether the proof is consistent with that root.
+/// Given a trusted root hash, call [`Self::verify`] or [`verify_coin_proof`] to check whether the
+/// proof is consistent with that root.
 ///
 /// # Size
 ///
@@ -110,6 +110,24 @@ impl SparseMerkleProof {
             None => empty_hash(0),
         }
     }
+}
+
+/// MRK-005 / `docs/resources/SPEC.md` §3.13: verify a coin Merkle proof against a **trusted** state
+/// root without any tree or storage handle.
+///
+/// This is the free-function spelling expected by `docs/requirements/IMPLEMENTATION_ORDER.md`
+/// (“`verify_coin_proof`”) and mirrors the future `CoinStore` static API from the master SPEC. It
+/// delegates to [`SparseMerkleProof::verify`] — no duplicated logic, no I/O, no globals.
+///
+/// # When to use
+///
+/// - Prefer [`SparseMerkleProof::verify`] when you already have a proof value in scope (`proof.verify(&root)`).
+/// - Use `verify_coin_proof(&proof, &root)` when naming parity with SPEC / RPC docs matters, or when
+///   threading a `fn(Proof, Root) -> bool` callback without a method receiver.
+#[inline]
+#[must_use]
+pub fn verify_coin_proof(proof: &SparseMerkleProof, expected_root: &Bytes32) -> bool {
+    proof.verify(expected_root)
 }
 
 // Add a public accessor for get_bit so proofs can use it.

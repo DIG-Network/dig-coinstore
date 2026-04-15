@@ -29,14 +29,14 @@
 //! root row in one [`crate::storage::WriteBatch`]. See [`persistent`](persistent) and
 //! `docs/requirements/domains/merkle/specs/MRK-003.md`.
 //!
-//! # Requirements: STR-004, MRK-001, MRK-002, MRK-003, MRK-004
-//! # Spec: docs/requirements/domains/merkle/specs/MRK-001.md, specs/MRK-004.md
+//! # Requirements: STR-004, MRK-001, MRK-002, MRK-003, MRK-004, MRK-005
+//! # Spec: docs/requirements/domains/merkle/specs/MRK-001.md, specs/MRK-004.md, specs/MRK-005.md
 //! # SPEC.md: Section 9 (Merkle Tree), Section 13.4 (Persistent Merkle Tree)
 
 pub mod persistent;
 pub mod proof;
 
-pub use proof::SparseMerkleProof;
+pub use proof::{verify_coin_proof, SparseMerkleProof};
 
 use std::collections::HashMap;
 use std::sync::OnceLock;

@@ -81,10 +81,22 @@ items:
   - id: MRK-005
     section: "Proof Generation & Verification"
     summary: "Static verify(proof, expected_root) -> bool for inclusion and non-inclusion proofs"
-    status: gap
+    status: implemented
     spec_ref: "docs/requirements/domains/merkle/specs/MRK-005.md"
-    tests: []
-    notes: ""
+    tests:
+      - tests/mrk_005_tests.rs
+      - vv_req_mrk_005_verify_inclusion_valid
+      - vv_req_mrk_005_verify_non_inclusion_valid
+      - vv_req_mrk_005_verify_empty_tree_proof
+      - vv_req_mrk_005_verify_roundtrip_multi_leaf
+      - vv_req_mrk_005_verify_tampered_sibling
+      - vv_req_mrk_005_verify_tampered_leaf
+      - vv_req_mrk_005_verify_wrong_root
+      - vv_req_mrk_005_verify_snapshot_old_root_still_valid
+      - vv_req_mrk_005_verify_against_wrong_tree_state
+      - vv_req_mrk_005_verify_coin_proof_matches_method
+      - vv_req_mrk_005_verify_with_degenerate_input
+    notes: "Production: `SparseMerkleProof::verify` + `verify_coin_proof` re-export from `src/merkle/mod.rs` (`src/merkle/proof.rs`). Free function is the IMPLEMENTATION_ORDER / SPEC spelling; method remains idiomatic for `proof.verify(&root)`."
 
   - id: MRK-006
     section: "Leaf Hash Function"
