@@ -36,7 +36,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 - [x] STO-003 — LMDB backend with named databases
 - [x] STO-004 — Bloom filter configuration (full bloom + prefix bloom)
 - [x] STO-005 — WriteBatch atomic block commits (RocksDB)
-- [ ] STO-006 — Compaction strategy per column family
+- [x] STO-006 — Compaction strategy per column family
 - [ ] STO-007 — Feature gates (`lmdb-storage`, `rocksdb-storage`)
 - [ ] STO-008 — Serialization (bincode for coin records, snapshots)
 

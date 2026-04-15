@@ -145,8 +145,8 @@ pub struct CoinStoreConfig {
 
     /// RocksDB `max_open_files` (API-003 / SPEC §2.6 default `1000`).
     ///
-    /// **RocksDB engine note:** `RocksDbBackend` in `src/storage/rocksdb.rs` opens with FIFO compaction on the
-    /// `state_snapshots` column family (STO-002 / STO-006). The upstream
+    /// **RocksDB engine note:** `RocksDbBackend` in `src/storage/rocksdb.rs` opens with FIFO compaction on
+    /// `archive_coin_records` and `state_snapshots` (**STO-006**). The upstream
     /// `rocksdb` crate requires `max_open_files = -1` in that configuration, so the backend **does not**
     /// apply this field when opening the DB. The field and [`Self::with_rocksdb_max_open_files`] remain for
     /// forward compatibility, tests that assert config round-trips, and any alternate layout that drops FIFO.
