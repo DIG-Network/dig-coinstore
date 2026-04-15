@@ -989,6 +989,19 @@ impl CoinStore {
         self.tip_hash = block.block_hash;
         self.timestamp = block.timestamp;
 
+        // PRF-001: Maintain in-memory unspent set incrementally.
+        // Add newly created coins (coinbase + tx additions) to unspent set.
+        for coinbase in &block.coinbase_coins {
+            self.unspent_ids.insert(coinbase.coin_id());
+        }
+        for addition in &block.additions {
+            self.unspent_ids.insert(addition.coin_id);
+        }
+        // Remove spent coins from unspent set.
+        for removal_id in &block.removals {
+            self.unspent_ids.remove(removal_id);
+        }
+
         // ─── Phase 3: Observability ──────────────────────────────────────
 
         // BLK-010: Performance logging — warn if > 10s (SPEC.md §1.5 #15, §2.7).
@@ -1251,6 +1264,16 @@ impl CoinStore {
         self.tip_hash = new_tip_hash;
         // Recompute root after removals/updates.
         let _ = self.merkle_tree.root();
+
+        // PRF-001: Maintain in-memory unspent set during rollback.
+        // Remove deleted coin IDs from unspent set.
+        for coin_id in &merkle_removals {
+            self.unspent_ids.remove(coin_id);
+        }
+        // Re-insert un-spent coin IDs into unspent set.
+        for (coin_id, _leaf_hash) in &merkle_updates {
+            self.unspent_ids.insert(*coin_id);
+        }
 
         Ok(RollbackResult {
             modified_coins,
