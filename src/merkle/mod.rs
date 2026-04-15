@@ -100,10 +100,15 @@ const EMPTY_LEAF_SENTINEL: [u8; 32] = [0u8; 32];
 /// - `EMPTY_HASHES[n]` = `merkle_node_hash(EMPTY_HASHES[n-1], EMPTY_HASHES[n-1])` for n > 0
 /// - `EMPTY_HASHES[256]` = root hash of an entirely empty 256-level tree
 ///
-/// Initialized lazily via `OnceLock` on first access. All 257 values are
-/// computed bottom-up in a single pass. Thread-safe: concurrent first-access
-/// from multiple threads initializes exactly once.
-static EMPTY_HASHES: OnceLock<Vec<Bytes32>> = OnceLock::new();
+/// **Storage shape:** fixed `[Bytes32; 257]` inside [`OnceLock`], not `Vec`, so the table is
+/// stack-sized at init time and matches **MRK-002 / NORMATIVE** (`OnceLock<[Bytes32; 257]>`).
+/// Lookup remains a single bounds-checked index — O(1), no heap per read, no recursive work
+/// on the query path (see `docs/requirements/domains/merkle/specs/MRK-002.md`).
+///
+/// Initialized lazily via [`OnceLock::get_or_init`] on first access. All 257 values are computed
+/// bottom-up in one pass. Rust guarantees concurrent first callers block until a single init
+/// completes, then all observe the same static slice.
+static EMPTY_HASHES: OnceLock<[Bytes32; 257]> = OnceLock::new();
 
 /// Get the pre-computed empty hash at the given tree level.
 ///
@@ -128,18 +133,17 @@ pub fn empty_hash(level: usize) -> Bytes32 {
     get_empty_hashes()[level]
 }
 
-/// Access the full pre-computed empty hash array.
-fn get_empty_hashes() -> &'static Vec<Bytes32> {
+/// Access the full pre-computed empty hash table (257 entries, indices `0..=SMT_HEIGHT`).
+fn get_empty_hashes() -> &'static [Bytes32; 257] {
     EMPTY_HASHES.get_or_init(|| {
-        let mut hashes = Vec::with_capacity(SMT_HEIGHT + 1);
+        let mut hashes = [Bytes32::default(); SMT_HEIGHT + 1];
 
-        // Level 0: empty leaf hash
-        hashes.push(merkle_leaf_hash(&EMPTY_LEAF_SENTINEL));
+        // Level 0: domain-separated empty leaf (MRK-002 § leaf sentinel).
+        hashes[0] = merkle_leaf_hash(&EMPTY_LEAF_SENTINEL);
 
-        // Levels 1..256: each level is the node hash of two copies of the level below.
-        for _ in 1..=SMT_HEIGHT {
-            let child = *hashes.last().unwrap();
-            hashes.push(merkle_node_hash(&child, &child));
+        // Levels 1..256: parent = H(left || right) with both children the same empty subtree.
+        for i in 1..=SMT_HEIGHT {
+            hashes[i] = merkle_node_hash(&hashes[i - 1], &hashes[i - 1]);
         }
 
         hashes

@@ -29,10 +29,18 @@ items:
   - id: MRK-002
     section: "Sparse Merkle Tree"
     summary: "Memoized empty hashes in OnceLock<[Bytes32; 257]> for O(1) empty subtree lookup"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/merkle/specs/MRK-002.md"
-    tests: []
-    notes: ""
+    tests:
+      - tests/mrk_002_tests.rs
+      - vv_req_mrk_002_empty_hash_leaf_level
+      - vv_req_mrk_002_empty_hash_root_level
+      - vv_req_mrk_002_empty_hash_consistency
+      - vv_req_mrk_002_empty_hash_o1_lookup
+      - vv_req_mrk_002_empty_hash_matches_recursive
+      - vv_req_mrk_002_concurrent_reads_match_serial
+      - vv_req_mrk_002_empty_hash_panics_above_smt_height
+    notes: "Production: `src/merkle/mod.rs` (`EMPTY_HASHES`, `empty_hash`, `get_empty_hashes`). Index 0 = empty leaf; index `SMT_HEIGHT` (256) = empty-tree root; matches MRK-001 `SparseMerkleTree` root contract."
 
   - id: MRK-003
     section: "Persistent Storage"
