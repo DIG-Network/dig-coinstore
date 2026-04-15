@@ -45,10 +45,21 @@ items:
   - id: MRK-003
     section: "Persistent Storage"
     summary: "merkle_nodes CF with dirty node tracking, incremental flush in same WriteBatch, startup loads only root"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/merkle/specs/MRK-003.md"
-    tests: []
-    notes: ""
+    tests:
+      - tests/mrk_003_tests.rs
+      - vv_req_mrk_003_dirty_map_populated_after_root
+      - vv_req_mrk_003_flush_persists_merkle_rows
+      - vv_req_mrk_003_flush_clears_dirty
+      - vv_req_mrk_003_atomic_batch_with_coin_records
+      - vv_req_mrk_003_load_roundtrip
+      - vv_req_mrk_003_load_rejects_tampered_metadata
+      - vv_req_mrk_003_load_missing_metadata_fails
+      - vv_req_mrk_003_removal_emits_delete_ops
+      - vv_req_mrk_003_proof_verifies_after_load
+      - vv_req_mrk_003_load_empty_leaves_with_persisted_empty_root
+    notes: "Production: `src/merkle/mod.rs` (`dirty_merkle_nodes`, `flush_to_batch`, `load_from_store`, `compute_subtree_hash_core` + `child_path`), `src/merkle/persistent.rs` (metadata key + `MerkleNodePersistOp`). Dirty rows materialize at `root()` recompute (MRK-001 deferred model). MRK-004 lazy sibling reads from `merkle_nodes` CF not implemented in `SparseMerkleTree` yet—proof path still recomputes siblings from the in-memory leaf multiset after `load_from_store`."
 
   - id: MRK-004
     section: "Proof Generation & Verification"
