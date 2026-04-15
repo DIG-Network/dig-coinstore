@@ -29,13 +29,23 @@
 //! root row in one [`crate::storage::WriteBatch`]. See [`persistent`](persistent) and
 //! `docs/requirements/domains/merkle/specs/MRK-003.md`.
 //!
-//! # Requirements: STR-004, MRK-001, MRK-002, MRK-003, MRK-004, MRK-005
-//! # Spec: docs/requirements/domains/merkle/specs/MRK-001.md, specs/MRK-004.md, specs/MRK-005.md
+//! # Requirements: STR-004, MRK-001, MRK-002, MRK-003, MRK-004, MRK-005, MRK-006
+//! # Spec: docs/requirements/domains/merkle/specs/MRK-001.md, specs/MRK-004.md, specs/MRK-005.md, specs/MRK-006.md
 //! # SPEC.md: Section 9 (Merkle Tree), Section 13.4 (Persistent Merkle Tree)
+//!
+//! ## MRK-006 leaf payloads vs domain-separated helpers
+//!
+//! [`coin_record_hash`](coin_record_hash) (MRK-006) hashes **only** the STO-008 bincode bytes of a
+//! [`crate::types::CoinRecord`] with [`chia_sha2::Sha256`] — no `0x00` prefix. That digest is what
+//! block application stores as the SMT leaf **value** keyed by `coin_id`. [`merkle_leaf_hash`] /
+//! [`merkle_node_hash`] remain the **internal** domain-separated primitives for MRK-001/MRK-002
+//! tree math over those 32-byte leaf values.
 
+mod leaf_hash;
 pub mod persistent;
 pub mod proof;
 
+pub use leaf_hash::coin_record_hash;
 pub use proof::{verify_coin_proof, SparseMerkleProof};
 
 use std::collections::HashMap;
