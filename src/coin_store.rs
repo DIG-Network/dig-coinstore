@@ -66,7 +66,7 @@ pub struct CoinStore {
     config: CoinStoreConfig,
 
     /// The storage backend (RocksDB or LMDB).
-    backend: Box<dyn KvStore>,
+    pub(crate) backend: Box<dyn KvStore>,
 
     /// In-memory sparse Merkle tree for state root computation.
     /// Persisted incrementally via dirty node flushing (MRK-003).

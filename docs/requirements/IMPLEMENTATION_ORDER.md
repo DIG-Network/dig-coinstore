@@ -69,9 +69,9 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 ## Phase 5: Hint Store
 
 - [x] HNT-001 — Hint validation (length <= 32 bytes, skip empty)
-- [ ] HNT-002 — Hint storage with idempotent insertion
-- [ ] HNT-003 — Forward index (coin_id -> hints) and reverse index (hint -> coin_ids)
-- [ ] HNT-004 — Hint queries (by hint, by coin_id, batch, count)
+- [x] HNT-002 — Hint storage with idempotent insertion
+- [x] HNT-003 — Forward index (coin_id -> hints) and reverse index (hint -> coin_ids)
+- [x] HNT-004 — Hint queries (by hint, by coin_id, batch, count)
 - [ ] HNT-005 — Rollback hint cleanup (delete hints for deleted coins)
 - [ ] HNT-006 — Variable-length hint keys (length-prefixed encoding, no prefix collisions)
 
