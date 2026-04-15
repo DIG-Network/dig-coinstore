@@ -220,7 +220,7 @@ fn vv_req_api_004_storage_error_from_conversion() {
 /// exercise `impl From<bincode::Error>` without relying on a particular serialize failure shape.
 #[test]
 fn vv_req_api_004_bincode_error_maps_via_from_to_serialization_error() {
-    let io_err = std::io::Error::new(std::io::ErrorKind::Other, "bincode io shim");
+    let io_err = std::io::Error::other("bincode io shim");
     let b_err: bincode::Error = io_err.into();
     let mapped: CoinStoreError = b_err.into();
     assert!(

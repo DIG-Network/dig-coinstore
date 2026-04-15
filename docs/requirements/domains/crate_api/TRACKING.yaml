@@ -113,10 +113,33 @@ items:
   - id: API-008
     section: "Snapshot Types"
     summary: "CoinStoreSnapshot struct with Serialize/Deserialize"
-    status: draft
+    status: verified
     spec_ref: "docs/requirements/domains/crate_api/specs/API-008.md"
-    tests: []
-    notes: "8 fields. Serialize+Deserialize for snapshot/restore and fast sync. Contains full coin records HashMap and hints Vec."
+    tests:
+      - vv_req_api_008_all_eight_fields_accessible
+      - vv_req_api_008_coins_hashmap_type
+      - vv_req_api_008_hints_vec_tuple_type
+      - vv_req_api_008_bincode_roundtrip_empty_snapshot
+      - vv_req_api_008_bincode_roundtrip_with_coins_and_hints
+      - vv_req_api_008_total_coins_and_total_value_conventions
+      - vv_req_api_008_clone_eq_debug
+      - vv_req_api_008_store_snapshot_not_initialized
+      - vv_req_api_008_store_save_snapshot_not_initialized
+      - vv_req_api_008_store_snapshot_matches_stats_three_coins
+      - vv_req_api_008_store_restore_roundtrip_new_directory
+      - vv_req_api_008_store_stats_after_restore_match_snapshot
+      - vv_req_api_008_store_restore_rejects_state_root_tamper
+      - vv_req_api_008_store_restore_empty_without_prior_genesis
+      - vv_req_api_008_store_restore_spent_legacy_record
+      - vv_req_api_008_store_save_snapshot_prunes_when_max_one
+      - vv_req_api_008_store_load_snapshot_missing_returns_none
+      - vv_req_api_008_store_load_latest_empty_returns_none
+      - vv_req_api_008_store_restore_rejects_total_value_mismatch
+    notes: >
+      CoinStoreSnapshot at crate root; CoinStore::snapshot/restore/save_snapshot/load_snapshot/
+      load_latest_snapshot/available_snapshot_heights; legacy 97-byte vs bincode storage encoding
+      (ff_eligible) so Merkle leaves match genesis; prune_snapshots_to_limit respects max_snapshots;
+      snapshot().hints empty until HNT. Dedicated file tests/api_008_tests.rs (rocksdb-storage where needed).
 
   - id: API-009
     section: "Type Aliases and Lineage Info"

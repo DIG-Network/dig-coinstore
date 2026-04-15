@@ -170,7 +170,7 @@ fn vv_req_api_002_to_chia_coin_record() {
     let chia = r.to_chia_coin_record();
     assert_eq!(chia.confirmed_block_index, 50);
     assert_eq!(chia.spent_block_index, 60);
-    assert_eq!(chia.coinbase, true);
+    assert!(chia.coinbase);
     assert_eq!(chia.coin, coin);
 }
 

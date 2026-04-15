@@ -11,7 +11,8 @@
 //! - **API-005:** [`BlockData`], [`CoinAddition`]
 //! - **API-006:** [`ApplyBlockResult`], [`RollbackResult`]
 //! - **API-007:** [`CoinStoreStats`]
-//! - API-008..009: additional types (stubs tracked in those specs)
+//! - **API-008:** [`CoinStoreSnapshot`]
+//! - API-009: additional types (stub tracked in that spec)
 //!
 //! ## `ChiaCoinRecord` vs `chia_protocol::CoinRecord`
 //!
@@ -379,9 +380,44 @@ pub struct CoinStoreStats {
     pub snapshot_count: usize,
 }
 
-/// Placeholder — API-008 (`CoinStoreSnapshot`).
-#[derive(Debug, Clone, Default)]
-pub struct CoinStoreSnapshot;
+/// Serializable checkpoint of the full coinstate at one instant (fast sync / backup / restore).
+///
+/// **Why it exists:** Chia has no first-class snapshot object; nodes replay from genesis. dig-coinstore
+/// standardizes this struct for bincode persistence and future checkpoint sync ([`SPEC.md`](../../docs/resources/SPEC.md)
+/// §1.6 improvement #6, §3.14; [API-008](docs/requirements/domains/crate_api/specs/API-008.md)).
+///
+/// **`block_hash`:** Tip header hash at capture time — matches [`crate::coin_store::CoinStore::tip_hash`]
+/// when the snapshot is produced by [`crate::coin_store::CoinStore::snapshot`].
+///
+/// **`coins` / `hints`:** Full materialized rows and `(coin_id, hint)` pairs — same `hints` element type as
+/// [`BlockData::hints`] for consistency across APIs.
+///
+/// **`total_coins` / `total_value`:** Per API-008 field table, `total_coins` SHOULD equal `coins.len()` as `u64`,
+/// and `total_value` SHOULD be the sum of **unspent** [`CoinRecord`] amounts at capture time. The type does
+/// not enforce these invariants; [`crate::coin_store::CoinStore::snapshot`] populates them and
+/// [`crate::coin_store::CoinStore::restore`] validates them before I/O.
+///
+/// # Requirement: API-008
+/// # Spec: docs/requirements/domains/crate_api/specs/API-008.md
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoinStoreSnapshot {
+    /// Tip height when the snapshot was taken.
+    pub height: u64,
+    /// Tip block header hash when the snapshot was taken.
+    pub block_hash: Bytes32,
+    /// Sparse Merkle root over coin record leaves at capture time.
+    pub state_root: Bytes32,
+    /// Tip block unix timestamp (seconds).
+    pub timestamp: u64,
+    /// Every coin row (spent and unspent) needed to rebuild indices and history.
+    pub coins: HashMap<CoinId, CoinRecord>,
+    /// Hint pairs carried on coins at capture time (same shape as [`BlockData::hints`]).
+    pub hints: Vec<(CoinId, Bytes32)>,
+    /// Count of coin rows (`coins.len()` when built by [`crate::coin_store::CoinStore::snapshot`]).
+    pub total_coins: u64,
+    /// Sum of unspent coin amounts (mojos) at capture time.
+    pub total_value: u64,
+}
 
 /// Placeholder — API-009 (`UnspentLineageInfo`).
 #[derive(Debug, Clone, Default)]
