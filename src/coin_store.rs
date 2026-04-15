@@ -28,6 +28,7 @@ use crate::storage::lmdb::LmdbBackend;
 use crate::storage::rocksdb::RocksDbBackend;
 use crate::storage::schema;
 use crate::storage::{StorageBackend as KvStore, WriteBatch};
+use crate::types::{ApplyBlockResult, BlockData, RollbackResult};
 
 /// Metadata keys stored in the `metadata` column family.
 const META_HEIGHT: &[u8] = b"chain_height";
@@ -305,6 +306,66 @@ impl CoinStore {
     /// # Requirement: API-003
     pub fn config(&self) -> &CoinStoreConfig {
         &self.config
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Block application & rollback (API-006 signatures; BLK-001+, RBK-001+ pipelines)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// Apply validated [`BlockData`] to this store.
+    ///
+    /// **Return type (API-006 / BLK-001):** `Result<ApplyBlockResult, CoinStoreError>`. On success,
+    /// callers receive the new state root and counts; on failure, **no** persistent state change (atomic).
+    ///
+    /// **Status:** The full validation + mutation pipeline (BLK-002..014) ships in later requirements.
+    /// Until [`CoinStore::init_genesis`] has run, returns [`CoinStoreError::NotInitialized`]. After
+    /// genesis, returns [`CoinStoreError::StorageError`] with a stable `"apply_block:"` prefix and the
+    /// block height in the message until BLK-001+ wires real behavior (see `tests/api_006_tests.rs`).
+    ///
+    /// # Requirement: API-006 (type surface), BLK-001 (full behavior)
+    pub fn apply_block(&mut self, block: BlockData) -> Result<ApplyBlockResult, CoinStoreError> {
+        if !self.initialized {
+            return Err(CoinStoreError::NotInitialized);
+        }
+        Err(CoinStoreError::StorageError(format!(
+            "apply_block: not implemented - block height {} (BLK-001..BLK-014)",
+            block.height
+        )))
+    }
+
+    /// Roll the coinstate back to `target_height` (may be negative for full reset per RBK-001).
+    ///
+    /// **Return type (API-006 / RBK-001):** `Result<RollbackResult, CoinStoreError>` with enriched
+    /// deleted / un-spent counts vs Chia's raw map alone ([`RollbackResult`]).
+    ///
+    /// **Status:** Rollback scan + Merkle rebuild (RBK-002..007) are not wired yet. Without genesis,
+    /// returns [`CoinStoreError::NotInitialized`]. Otherwise returns [`CoinStoreError::StorageError`]
+    /// with a `"rollback_to_block:"` prefix.
+    ///
+    /// # Requirement: API-006 (type surface), RBK-001 (full behavior)
+    pub fn rollback_to_block(
+        &mut self,
+        target_height: i64,
+    ) -> Result<RollbackResult, CoinStoreError> {
+        if !self.initialized {
+            return Err(CoinStoreError::NotInitialized);
+        }
+        Err(CoinStoreError::StorageError(format!(
+            "rollback_to_block: not implemented - target_height {target_height} (RBK-001..RBK-007)"
+        )))
+    }
+
+    /// Convenience: roll back exactly `n` blocks from the current tip.
+    ///
+    /// **Return type:** Same as [`Self::rollback_to_block`]. Implementation will compute the target
+    /// height from [`Self::height()`] and delegate (RBK-005).
+    pub fn rollback_n_blocks(&mut self, n: u64) -> Result<RollbackResult, CoinStoreError> {
+        if !self.initialized {
+            return Err(CoinStoreError::NotInitialized);
+        }
+        Err(CoinStoreError::StorageError(format!(
+            "rollback_n_blocks: not implemented - n {n} (RBK-005 delegates to rollback_to_block)"
+        )))
     }
 
     // ─────────────────────────────────────────────────────────────────────

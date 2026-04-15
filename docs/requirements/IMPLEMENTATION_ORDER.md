@@ -23,7 +23,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 - [x] API-003 — CoinStoreConfig with builder pattern and defaults
 - [x] API-004 — CoinStoreError enum (15 variants per NORMATIVE API-004)
 - [x] API-005 — BlockData and CoinAddition structs
-- [ ] API-006 — ApplyBlockResult and RollbackResult structs
+- [x] API-006 — ApplyBlockResult and RollbackResult structs
 - [ ] API-007 — CoinStoreStats struct
 - [ ] API-008 — CoinStoreSnapshot struct (serde Serialize/Deserialize)
 - [ ] API-009 — CoinId/PuzzleHash type aliases and UnspentLineageInfo struct

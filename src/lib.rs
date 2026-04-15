@@ -105,12 +105,15 @@ pub mod error;
 pub use error::CoinStoreError;
 
 /// Domain types: CoinRecord, BlockData, CoinAddition, result structs, type aliases.
-/// See: API-002, API-005 (`docs/requirements/domains/crate_api/specs/`)
+/// See: `docs/requirements/domains/crate_api/specs/` (API-002, API-005, API-006, …).
 pub mod types;
 
 // Wire-shaped coin row for interop (see `types` module doc: mirrors upstream `CoinRecord` until
 // `chia-protocol` in the `dig-clvm` graph exposes it; then replace with `pub use chia_protocol::CoinRecord as ChiaCoinRecord`).
-pub use types::{BlockData, ChiaCoinRecord, CoinAddition, CoinId, CoinRecord, PuzzleHash};
+pub use types::{
+    ApplyBlockResult, BlockData, ChiaCoinRecord, CoinAddition, CoinId, CoinRecord, PuzzleHash,
+    RollbackResult,
+};
 
 /// Block application pipeline (Phase 1 validation + Phase 2 mutation).
 /// See: docs/requirements/domains/block_application/specs/
