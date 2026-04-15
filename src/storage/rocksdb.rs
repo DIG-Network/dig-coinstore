@@ -4,6 +4,8 @@
 //! `dyn` [`StorageBackend`], schema-evolution reopen, write-buffer table alignment).
 //! **STO-004 (bloom / prefix / L0 pin):** [`tests/sto_004_tests.rs`](../../tests/sto_004_tests.rs) exercises
 //! [`sto004_bloom_plan_for_column_family`] (matrix) plus an open smoke check.
+//! **STO-005 (WriteBatch + WAL durability):** [`tests/sto_005_tests.rs`](../../tests/sto_005_tests.rs) — atomic
+//! cross-CF batches, failure rollback, `write_opt` with `sync=true` (see [`sto005_batch_write_options`]).
 //!
 //! Implements [`StorageBackend`] using RocksDB with **one column family per logical store** from
 //! [`super::schema::ALL_COLUMN_FAMILIES`]. This matches **STO-002** ([`STO-002.md`](../../docs/requirements/domains/storage/specs/STO-002.md)):
@@ -28,7 +30,7 @@ use std::sync::Arc;
 
 use rocksdb::{
     BlockBasedOptions, ColumnFamilyDescriptor, DBCompactionStyle, FifoCompactOptions, IteratorMode,
-    Options, SliceTransform, WriteBatch as RocksWriteBatch, DB,
+    Options, SliceTransform, WriteBatch as RocksWriteBatch, WriteOptions, DB,
 };
 
 use crate::config::{CoinStoreConfig, BLOOM_FILTER_BITS_PER_KEY};
@@ -255,6 +257,24 @@ fn column_family_descriptor(cf: &str, config: &CoinStoreConfig) -> ColumnFamilyD
     ColumnFamilyDescriptor::new(cf, o)
 }
 
+/// [`WriteOptions`] used for every successful [`StorageBackend::batch_write`] on RocksDB (**STO-005**).
+///
+/// **Normative intent:** [`STO-005.md`](../../docs/requirements/domains/storage/specs/STO-005.md) calls for
+/// `write_opt.set_sync(true)` so a committed block batch is **durable** after `batch_write` returns — one
+/// synchronous WAL flush for the whole native [`rocksdb::WriteBatch`] rather than relying on the library
+/// default (`sync = false`), which may leave data in the OS page cache across crashes.
+///
+/// **Interaction with empty batches:** [`RocksDbBackend::batch_write`] returns early when the logical
+/// [`super::WriteBatch`] is empty, so this helper is never consulted for no-op commits (no spurious fsync).
+///
+/// **Contrast with [`StorageBackend::put`]:** point `put` / `delete` still use RocksDB’s default write path
+/// (no per-op `sync`); only the block-sized batch entry point opts into the stricter durability contract.
+fn sto005_batch_write_options() -> WriteOptions {
+    let mut o = WriteOptions::default();
+    o.set_sync(true);
+    o
+}
+
 impl RocksDbBackend {
     /// Open (or create) a RocksDB database using [`CoinStoreConfig`] tuning.
     ///
@@ -324,10 +344,14 @@ impl StorageBackend for RocksDbBackend {
 
     /// Atomically apply all operations in the batch.
     ///
-    /// Uses RocksDB's native `WriteBatch` for a single WAL fsync.
-    /// This is the primary performance optimization for block application
-    /// (STO-005): a block with 1000 coins generates ~5000 write ops, all
-    /// committed in one atomic batch instead of individual puts.
+    /// Uses RocksDB’s native write batch plus [`DB::write_opt`] with `sto005_batch_write_options()`
+    /// so the commit is **durable** (synchronous WAL) and still a **single** engine-level write for all ops
+    /// (**STO-005**). If building the native batch fails (e.g. unknown logical `cf` before `write_opt`), nothing
+    /// is persisted — partial native batches never reach the WAL.
+    ///
+    /// **Throughput:** Block-sized batches amortize memtable + WAL work vs. issuing one tiny batch per row;
+    /// see [`tests/sto_005_tests.rs`](../../tests/sto_005_tests.rs) for the “many tiny commits vs. one fat batch”
+    /// performance proof obligation.
     fn batch_write(&self, batch: WriteBatch) -> Result<(), StorageError> {
         if batch.is_empty() {
             return Ok(());
@@ -348,8 +372,9 @@ impl StorageBackend for RocksDbBackend {
             }
         }
 
+        let opts = sto005_batch_write_options();
         self.db
-            .write(rocks_batch)
+            .write_opt(rocks_batch, &opts)
             .map_err(|e| StorageError::BackendError(format!("RocksDB batch write error: {}", e)))
     }
 
