@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "socraticode": {
+      "command": "npx",
+      "args": ["-y", "socraticode"]
+    },
+    "gitnexus": {
+      "command": "npx",
+      "args": ["-y", "gitnexus@latest", "mcp"]
+    }
+  }
+}
