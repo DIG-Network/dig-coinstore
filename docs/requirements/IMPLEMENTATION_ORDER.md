@@ -51,7 +51,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 
 ## Phase 4: Block Application Pipeline
 
-- [ ] BLK-001 — `apply_block()` entry point signature and return type
+- [x] BLK-001 — `apply_block()` entry point signature and return type
 - [ ] BLK-002 — Height continuity validation
 - [ ] BLK-003 — Parent hash validation
 - [ ] BLK-004 — Reward coin count assertion (0 at genesis, >= 2 otherwise)

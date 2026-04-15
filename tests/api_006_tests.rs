@@ -192,12 +192,12 @@ fn vv_req_api_006_apply_block_not_initialized_without_genesis() {
     assert!(matches!(out, Err(CoinStoreError::NotInitialized)));
 }
 
-/// **Acceptance / BLK-001 precursor:** [`CoinStore::apply_block`] returns `Result<ApplyBlockResult, CoinStoreError>`.
+/// **Acceptance / BLK-001:** [`CoinStore::apply_block`] returns `Result<ApplyBlockResult, CoinStoreError>`.
 ///
 /// **Proof:** Type annotation on the `let` binding forces the success arm to be [`ApplyBlockResult`].
-/// [`CoinStore::apply_block`] returns [`CoinStoreError::NotInitialized`] until [`CoinStore::init_genesis`]
-/// runs (API-001); after empty genesis, the BLK stub returns [`CoinStoreError::StorageError`] with an
-/// `apply_block:` prefix until BLK-001+ implements the pipeline.
+/// After empty genesis at height 0, applying a block at height 7 fails with `HeightMismatch`
+/// because BLK-002 requires `block.height == current + 1`. The type annotation on the error
+/// binding proves the method returns the correct Result type (API-006 surface).
 #[cfg(feature = "rocksdb-storage")]
 #[test]
 fn vv_req_api_006_coin_store_apply_block_result_type() {
@@ -207,16 +207,11 @@ fn vv_req_api_006_coin_store_apply_block_result_type() {
     let block = minimal_block_at(7);
 
     let out: Result<ApplyBlockResult, CoinStoreError> = store.apply_block(block);
-    let err = out.expect_err("apply_block is stub until BLK-001+");
-    match err {
-        CoinStoreError::StorageError(msg) => {
-            assert!(
-                msg.contains("apply_block:"),
-                "stub error should stay prefixed for test stability: {msg}"
-            );
-        }
-        other => panic!("unexpected error variant: {other:?}"),
-    }
+    let err = out.expect_err("block at height 7 with current height 0 must fail (BLK-002)");
+    assert!(
+        matches!(err, CoinStoreError::HeightMismatch { expected: 1, got: 7 }),
+        "Expected HeightMismatch {{ expected: 1, got: 7 }}, got: {err:?}"
+    );
 }
 
 /// **Acceptance / RBK-001 precursor:** [`CoinStore::rollback_to_block`] returns `Result<RollbackResult, CoinStoreError>`.
