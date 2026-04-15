@@ -1,5 +1,8 @@
 //! RocksDB storage backend implementation.
 //!
+//! **Verification:** [`tests/sto_002_tests.rs`](../../tests/sto_002_tests.rs) (twelve CFs, isolation, reopen,
+//! `dyn` [`StorageBackend`], schema-evolution reopen, write-buffer table alignment).
+//!
 //! Implements [`StorageBackend`] using RocksDB with **one column family per logical store** from
 //! [`super::schema::ALL_COLUMN_FAMILIES`]. This matches **STO-002** ([`STO-002.md`](../../docs/requirements/domains/storage/specs/STO-002.md)):
 //! twelve CFs, per-CF write-buffer sizing, bloom / prefix tuning (coordinated with [`STO-004`](../../docs/requirements/domains/storage/specs/STO-004.md)),
@@ -33,6 +36,7 @@ use super::schema::{
     CF_ARCHIVE_COIN_RECORDS, CF_COIN_BY_CONFIRMED_HEIGHT, CF_COIN_BY_PARENT,
     CF_COIN_BY_PUZZLE_HASH, CF_COIN_BY_SPENT_HEIGHT, CF_COIN_RECORDS, CF_HINTS, CF_HINTS_BY_VALUE,
     CF_MERKLE_NODES, CF_METADATA, CF_STATE_SNAPSHOTS, CF_UNSPENT_BY_PUZZLE_HASH,
+    STO002_ROCKS_WRITE_BUFFER_BYTES,
 };
 use super::{StorageBackend, StorageError, WriteBatch, WriteOp};
 
@@ -80,31 +84,9 @@ fn db_options_for_open(config: &CoinStoreConfig) -> Options {
     opts.set_wal_bytes_per_sync(1 << 20);
     opts.set_max_total_wal_size(256 * 1024 * 1024);
 
-    let mut block_opts = BlockBasedOptions::default();
-    if config.bloom_filter {
-        block_opts.set_bloom_filter(f64::from(BLOOM_FILTER_BITS_PER_KEY), false);
-    }
-    opts.set_block_based_table_factory(&block_opts);
+    // SST blooms and table factories are configured per column family in [`column_family_descriptor`];
+    // the implicit `default` CF keeps RocksDB defaults.
     opts
-}
-
-/// Per-CF memtable budget from **STO-002** § Per-CF Configuration Summary (MiB → bytes).
-fn cf_write_buffer_bytes(cf: &str) -> usize {
-    const MIB: usize = 1024 * 1024;
-    match cf {
-        CF_COIN_RECORDS | CF_MERKLE_NODES => 64 * MIB,
-        CF_COIN_BY_PUZZLE_HASH | CF_UNSPENT_BY_PUZZLE_HASH => 32 * MIB,
-        CF_STATE_SNAPSHOTS => 8 * MIB,
-        CF_METADATA => 4 * MIB,
-        CF_COIN_BY_PARENT
-        | CF_COIN_BY_CONFIRMED_HEIGHT
-        | CF_COIN_BY_SPENT_HEIGHT
-        | CF_HINTS
-        | CF_HINTS_BY_VALUE
-        | CF_ARCHIVE_COIN_RECORDS => 16 * MIB,
-        // Defensive: callers outside `ALL_COLUMN_FAMILIES` should not reach here.
-        _ => 16 * MIB,
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -147,8 +129,13 @@ fn cf_uses_fixed_prefix_32(cf: &str) -> bool {
 /// Applies write-buffer sizing, bloom / prefix table options, and compaction style per **STO-002** tables.
 /// `state_snapshots` uses **FIFO** compaction (checkpoint append pattern); all other CFs use **Level**.
 fn column_family_descriptor(cf: &str, config: &CoinStoreConfig) -> ColumnFamilyDescriptor {
+    let idx = ALL_COLUMN_FAMILIES
+        .iter()
+        .position(|&n| n == cf)
+        .unwrap_or_else(|| panic!("STO-002: unknown column family name {cf:?}"));
+
     let mut o = Options::default();
-    o.set_write_buffer_size(cf_write_buffer_bytes(cf));
+    o.set_write_buffer_size(STO002_ROCKS_WRITE_BUFFER_BYTES[idx]);
 
     if cf_uses_fixed_prefix_32(cf) {
         o.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
@@ -158,8 +145,13 @@ fn column_family_descriptor(cf: &str, config: &CoinStoreConfig) -> ColumnFamilyD
     if config.bloom_filter {
         match cf_bloom_profile(cf) {
             BloomProfile::None => {}
-            BloomProfile::Full | BloomProfile::Prefix32 => {
+            // Whole-key bloom (STO-002 “Full”); second argument `false` = classic full-key filter.
+            BloomProfile::Full => {
                 block.set_bloom_filter(f64::from(BLOOM_FILTER_BITS_PER_KEY), false);
+            }
+            // Prefix-length bloom for 32-byte leading component (puzzle hash / hint prefix).
+            BloomProfile::Prefix32 => {
+                block.set_bloom_filter(f64::from(BLOOM_FILTER_BITS_PER_KEY), true);
             }
         }
     }
