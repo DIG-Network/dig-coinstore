@@ -19,7 +19,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 ## Phase 1: Crate API Types
 
 - [x] API-001 — CoinStore constructor (`new`, `with_config`)
-- [ ] API-002 — CoinRecord struct (coin, confirmed_height, spent_height, coinbase, timestamp, ff_eligible) + from/to_chia_coin_record() interop
+- [x] API-002 — CoinRecord struct (coin, confirmed_height, spent_height, coinbase, timestamp, ff_eligible) + from/to_chia_coin_record() interop
 - [ ] API-003 — CoinStoreConfig with builder pattern and defaults
 - [ ] API-004 — CoinStoreError enum (14 variants)
 - [ ] API-005 — BlockData and CoinAddition structs

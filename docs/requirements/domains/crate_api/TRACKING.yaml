@@ -21,10 +21,23 @@ items:
   - id: API-002
     section: "Core Types"
     summary: "CoinRecord struct with all fields, derived methods, and chia-protocol interop conversions"
-    status: draft
+    status: verified
     spec_ref: "docs/requirements/domains/crate_api/specs/API-002.md"
-    tests: []
-    notes: "6 fields, Debug+Clone+Serialize+Deserialize, 7 methods: new(), is_spent(), spend(), coin_id(), to_coin_state(), from_chia_coin_record(), to_chia_coin_record(). Interop with chia_protocol::CoinRecord."
+    tests:
+      - vv_req_api_002_all_fields_accessible
+      - vv_req_api_002_new_creates_unspent_ff_false
+      - vv_req_api_002_spend_marks_spent
+      - vv_req_api_002_coin_id_matches_coin
+      - vv_req_api_002_to_coin_state_maps_heights
+      - vv_req_api_002_clone_round_trip_fields
+      - vv_req_api_002_serde_bincode_roundtrip
+      - vv_req_api_002_double_spend_overwrites_height
+      - vv_req_api_002_to_coin_state_u32_boundary
+      - vv_req_api_002_from_chia_unspent
+      - vv_req_api_002_from_chia_spent
+      - vv_req_api_002_to_chia_coin_record
+      - vv_req_api_002_chia_roundtrip_resets_ff_eligible
+    notes: "CoinRecord + ChiaCoinRecord (wire mirror until chia-protocol in dig-clvm graph exposes CoinRecord). Crate-root re-exports: CoinRecord, ChiaCoinRecord, CoinId, PuzzleHash. Interop maps spent_block_index 0 <-> None."
 
   - id: API-003
     section: "Core Types"

@@ -99,6 +99,10 @@ pub mod error;
 /// See: docs/requirements/domains/crate_api/specs/API-002.md
 pub mod types;
 
+// Wire-shaped coin row for interop (see `types` module doc: mirrors upstream `CoinRecord` until
+// `chia-protocol` in the `dig-clvm` graph exposes it; then replace with `pub use chia_protocol::CoinRecord as ChiaCoinRecord`).
+pub use types::{ChiaCoinRecord, CoinId, CoinRecord, PuzzleHash};
+
 /// Block application pipeline (Phase 1 validation + Phase 2 mutation).
 /// See: docs/requirements/domains/block_application/specs/
 pub mod block_apply;

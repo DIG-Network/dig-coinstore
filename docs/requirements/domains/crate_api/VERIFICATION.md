@@ -3,7 +3,7 @@
 | ID | Status | Summary | Verification Approach |
 |----|--------|---------|----------------------|
 | [API-001](NORMATIVE.md#API-001) | ✅ | CoinStore constructors | 7 tests (tests/api_001_tests.rs): new() Ok, with_config() Ok, empty before genesis, init_genesis with coins (state_root != 0), empty genesis Ok, double genesis rejected, re-open preserves state. |
-| [API-002](NORMATIVE.md#API-002) | -- | CoinRecord struct | Tests: all 6 fields accessible, new() creates unspent record, is_spent() false for new/true after spend(), spend() sets spent_height, coin_id() matches Coin::coin_id(), to_coin_state() produces correct CoinState, Debug/Clone/Serialize/Deserialize derives. |
+| [API-002](NORMATIVE.md#API-002) | ✅ | CoinRecord struct | 13 tests in `tests/api_002_tests.rs`: fields, new/spend/is_spent, coin_id vs Coin::coin_id, to_coin_state + u32::MAX boundary, Clone, bincode serde, double-spend overwrite, ChiaCoinRecord from/to + round-trip (ff_eligible reset). |
 | [API-003](NORMATIVE.md#API-003) | -- | CoinStoreConfig builder | Tests: all defaults match spec table, builder chaining, preserves unset fields, 8 with_* methods, StorageBackend enum variants, Default trait, CoinStore integration. |
 | [API-004](NORMATIVE.md#API-004) | -- | CoinStoreError enum | Tests: all 15 variants constructible, Clone round-trip, PartialEq equality/inequality, Display formatting via thiserror, Error trait, structured data types correct. |
 | [API-005](NORMATIVE.md#API-005) | -- | BlockData and CoinAddition | Tests: all BlockData fields accessible, all CoinAddition fields accessible, additions Vec<CoinAddition>, removals Vec<CoinId>, hints Vec<(CoinId, Bytes32)>, expected_state_root Option. |
