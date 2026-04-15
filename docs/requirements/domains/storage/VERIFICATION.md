@@ -2,7 +2,7 @@
 
 | ID | Status | Summary | Verification Approach |
 |----|--------|---------|----------------------|
-| [STO-001](NORMATIVE.md#STO-001) | :x: | StorageBackend trait | Tests: trait methods exist, both backends implement trait. |
+| [STO-001](NORMATIVE.md#STO-001) | :white_check_mark: | StorageBackend trait | `tests/sto_001_tests.rs`: Send+Sync compile checks; per-`rocksdb-storage` integration tests for all seven methods + `dyn` coercion + unknown CF; per-`lmdb-storage` mirror suite including empty `batch_write`. Trait contract table in `src/storage/mod.rs`. |
 | [STO-002](NORMATIVE.md#STO-002) | :x: | RocksDB 12 column families | Tests: all CFs created on open, data isolated per CF. |
 | [STO-003](NORMATIVE.md#STO-003) | :x: | LMDB 6 named databases | Tests: all DBs created on open, data isolated per DB. |
 | [STO-004](NORMATIVE.md#STO-004) | :x: | Bloom filter configuration | Tests: verify bloom config per CF via RocksDB options. |

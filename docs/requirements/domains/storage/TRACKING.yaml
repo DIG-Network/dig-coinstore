@@ -6,10 +6,15 @@ items:
   - id: STO-001
     section: "Trait Abstraction"
     summary: "StorageBackend trait with get, put, delete, batch_write, prefix_scan, flush, compact"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/storage/specs/STO-001.md"
-    tests: []
-    notes: ""
+    tests:
+      - tests/sto_001_tests.rs
+    notes: >
+      Dedicated tests/sto_001_tests.rs: compile-time Send+Sync for WriteBatch/WriteOp and both backends when
+      features enable; Rocks module covers dyn coercion, get/put, missing get, idempotent delete, prefix_scan (5),
+      batch_write (3 puts + empty), unknown CF, flush/compact. LMDB module mirrors core semantics + empty batch.
+      Trait docs expanded in src/storage/mod.rs (method semantics table + doc links).
 
   - id: STO-002
     section: "Backend Implementations"

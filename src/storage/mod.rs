@@ -18,6 +18,9 @@
 //! # Requirements: STR-003, STO-001
 //! # Spec: docs/requirements/domains/storage/specs/STO-001.md
 //! # SPEC.md: Section 7 (Storage Architecture)
+//!
+//! **Verification:** behavioral acceptance for [`StorageBackend`] lives in [`tests/sto_001_tests.rs`](../../tests/sto_001_tests.rs)
+//! (RocksDB by default; run with `--no-default-features --features lmdb-storage` for the LMDB slice).
 
 #[cfg(feature = "rocksdb-storage")]
 pub mod rocksdb;
