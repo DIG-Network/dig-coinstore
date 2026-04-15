@@ -64,10 +64,19 @@ items:
   - id: MRK-004
     section: "Proof Generation & Verification"
     summary: "get_coin_proof(coin_id) returns SparseMerkleProof with 256-level sibling path for existing and non-existing coins"
-    status: gap
+    status: implemented
     spec_ref: "docs/requirements/domains/merkle/specs/MRK-004.md"
-    tests: []
-    notes: ""
+    tests:
+      - vv_req_mrk_004_inclusion_proof_verifies
+      - vv_req_mrk_004_proof_sibling_count_is_256
+      - vv_req_mrk_004_inclusion_leaf_value_matches_inserted_hash
+      - vv_req_mrk_004_exclusion_leaf_value_is_empty_hash
+      - vv_req_mrk_004_proof_empty_tree_exclusion
+      - vv_req_mrk_004_proof_with_multiple_leaves
+      - vv_req_mrk_004_proof_after_leaf_update
+      - vv_req_mrk_004_dirty_tree_returns_error
+      - vv_req_mrk_004_get_coin_proof_after_persist_and_load
+    notes: "`SparseMerkleProof::leaf_value` exposes MRK-004 canonical 32-byte leaf; `value` stays `Option` for serde. `get_proof` remains for diagnostics without dirty guard. Lazy per-sibling reads from `merkle_nodes` without a full leaf map are not implemented yet."
 
   - id: MRK-005
     section: "Proof Generation & Verification"

@@ -35,7 +35,7 @@ fn vv_req_mrk_005_exclusion_proof() {
     tree.batch_insert(&[(key_present, value)]).unwrap();
     let root = tree.root();
 
-    let proof = tree.get_proof(&key_absent);
+    let proof = tree.get_coin_proof(&key_absent).unwrap();
     assert_eq!(proof.value, None, "Exclusion proof must have None value");
     assert!(
         proof.verify(&root),
@@ -53,7 +53,7 @@ fn vv_req_mrk_005_proof_invalid_root() {
     tree.batch_insert(&[(key, value)]).unwrap();
     let _root = tree.root();
 
-    let proof = tree.get_proof(&key);
+    let proof = tree.get_coin_proof(&key).unwrap();
     let wrong_root = Bytes32::from([0xFFu8; 32]);
     assert!(
         !proof.verify(&wrong_root),
@@ -75,7 +75,7 @@ fn vv_req_mrk_005_proof_with_multiple_leaves() {
 
     // Verify inclusion proof for each inserted leaf.
     for (key, value) in &entries {
-        let proof = tree.get_proof(key);
+        let proof = tree.get_coin_proof(key).unwrap();
         assert_eq!(proof.value, Some(*value));
         assert!(
             proof.verify(&root),
@@ -86,7 +86,7 @@ fn vv_req_mrk_005_proof_with_multiple_leaves() {
 
     // Verify exclusion proof for a key NOT in the tree.
     let absent = Bytes32::from([0xFFu8; 32]);
-    let proof = tree.get_proof(&absent);
+    let proof = tree.get_coin_proof(&absent).unwrap();
     assert_eq!(proof.value, None);
     assert!(
         proof.verify(&root),

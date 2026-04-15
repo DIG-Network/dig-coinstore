@@ -45,7 +45,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 - [x] MRK-001 — Sparse Merkle tree with batch insert/update/remove
 - [x] MRK-002 — Memoized empty hash array (257 levels, OnceLock)
 - [x] MRK-003 — Persistent internal nodes (merkle_nodes column family)
-- [ ] MRK-004 — Proof generation (`get_coin_proof`)
+- [x] MRK-004 — Proof generation (`get_coin_proof`)
 - [ ] MRK-005 — Proof verification (`verify_coin_proof`)
 - [ ] MRK-006 — Leaf hash function (`coin_record_hash` using `chia_sha2::Sha256`, determinism)
 

@@ -29,12 +29,14 @@
 //! root row in one [`crate::storage::WriteBatch`]. See [`persistent`](persistent) and
 //! `docs/requirements/domains/merkle/specs/MRK-003.md`.
 //!
-//! # Requirements: STR-004, MRK-001, MRK-002, MRK-003
-//! # Spec: docs/requirements/domains/merkle/specs/MRK-001.md
+//! # Requirements: STR-004, MRK-001, MRK-002, MRK-003, MRK-004
+//! # Spec: docs/requirements/domains/merkle/specs/MRK-001.md, specs/MRK-004.md
 //! # SPEC.md: Section 9 (Merkle Tree), Section 13.4 (Persistent Merkle Tree)
 
 pub mod persistent;
 pub mod proof;
+
+pub use proof::SparseMerkleProof;
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -189,14 +191,18 @@ pub enum MerkleError {
     /// Recomputed root from the provided leaf map does not match the single metadata read (data
     /// corruption or partial write).
     #[error("persisted merkle root mismatch: disk={disk:?} recomputed={recomputed:?}")]
-    PersistedRootMismatch {
-        disk: Bytes32,
-        recomputed: Bytes32,
-    },
+    PersistedRootMismatch { disk: Bytes32, recomputed: Bytes32 },
 
     /// Backend I/O failure while loading persisted Merkle metadata.
     #[error("storage error during merkle load: {0}")]
     Storage(String),
+
+    /// MRK-004 / NORMATIVE: [`SparseMerkleTree::get_coin_proof`] refuses to mint a proof while the
+    /// MRK-001 deferred root is stale (`root_hash` unset with a non-empty leaf map). Callers must
+    /// run [`SparseMerkleTree::root`] after batch mutations so the proof is tied to a single
+    /// committed state root (same boundary as block application).
+    #[error("cannot generate coin proof while tree is dirty; call root() after mutations")]
+    ProofRequiresCleanTree,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -219,8 +225,8 @@ pub enum MerkleError {
 /// This is memory-efficient for sparse trees: a tree with 10M coins stores
 /// only 10M leaf entries, not 2^256 nodes.
 ///
-/// # Requirements: MRK-001, MRK-003
-/// # Spec: docs/requirements/domains/merkle/specs/MRK-001.md, specs/MRK-003.md
+/// # Requirements: MRK-001, MRK-003, MRK-004
+/// # Spec: docs/requirements/domains/merkle/specs/MRK-001.md, specs/MRK-003.md, specs/MRK-004.md
 /// # SPEC.md: Section 9 (Merkle Tree)
 ///
 /// # Reference
@@ -378,13 +384,7 @@ impl SparseMerkleTree {
         }
         let leaf_refs: Vec<(&Bytes32, &Bytes32)> = self.leaves.iter().collect();
         let mut sink = HashMap::new();
-        Self::compute_subtree_hash_core(
-            &leaf_refs,
-            0,
-            &Bytes32::default(),
-            &mut sink,
-            false,
-        )
+        Self::compute_subtree_hash_core(&leaf_refs, 0, &Bytes32::default(), &mut sink, false)
     }
 
     /// Check if the tree has been modified since the last `root()` call.
@@ -526,13 +526,8 @@ impl SparseMerkleTree {
         let path_left = child_path(path, depth, false);
         let path_right = child_path(path, depth, true);
 
-        let left_hash = Self::compute_subtree_hash_core(
-            &left,
-            depth + 1,
-            &path_left,
-            dirty_out,
-            record_dirty,
-        );
+        let left_hash =
+            Self::compute_subtree_hash_core(&left, depth + 1, &path_left, dirty_out, record_dirty);
         let right_hash = Self::compute_subtree_hash_core(
             &right,
             depth + 1,
