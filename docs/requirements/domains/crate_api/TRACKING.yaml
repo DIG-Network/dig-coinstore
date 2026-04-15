@@ -60,10 +60,20 @@ items:
   - id: API-004
     section: "Error Types"
     summary: "CoinStoreError enum with 15 variants and thiserror derives"
-    status: draft
+    status: verified
     spec_ref: "docs/requirements/domains/crate_api/specs/API-004.md"
-    tests: []
-    notes: "15 variants covering chain continuity, coin existence, spend validity, storage, genesis, and query errors. Debug+Clone+PartialEq+thiserror::Error."
+    tests:
+      - vv_req_api_004_all_fifteen_variants_constructible
+      - vv_req_api_004_clone_equals_original_for_each_shape
+      - vv_req_api_004_partial_eq_distinct_payloads
+      - vv_req_api_004_display_templates_match_normative_wording
+      - vv_req_api_004_genesis_already_initialized_reachable_from_store
+      - vv_req_api_004_storage_error_from_conversion
+      - vv_req_api_004_bincode_error_maps_via_from_to_serialization_error
+      - vv_req_api_004_bincode_decode_maps_to_deserialization_error
+      - vv_req_api_004_from_rocksdb_error_stringifies
+      - vv_req_api_004_from_heed_error_stringifies
+    notes: "Crate-root pub use; decode path uses from_bincode_deserialize; heed/rocksdb From behind features. RollbackAboveTip deferred to API-010 per NORMATIVE."
 
   - id: API-005
     section: "Block Input Types"

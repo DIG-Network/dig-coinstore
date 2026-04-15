@@ -102,6 +102,8 @@ pub use config::{
 /// See: docs/requirements/domains/crate_api/specs/API-004.md
 pub mod error;
 
+pub use error::CoinStoreError;
+
 /// Domain types: CoinRecord, BlockData, CoinAddition, result structs, type aliases.
 /// See: docs/requirements/domains/crate_api/specs/API-002.md
 pub mod types;
