@@ -104,13 +104,11 @@ items:
     status: verified
     spec_ref: "docs/requirements/domains/crate_api/specs/API-007.md"
     tests:
-      - vv_req_api_007_stats_struct_all_fields_accessible
-      - vv_req_api_007_stats_fresh_store_defaults
-      - vv_req_api_007_stats_after_genesis_three_coins
-      - vv_req_api_007_stats_survives_reopen
-      - vv_req_api_007_stats_clone_round_trip
-      - vv_req_api_007_stats_debug_non_empty
-    notes: "CoinStore::stats(&self); SparseMerkleTree::root_observed for state_root without &mut. Coin counts via coin_records scan + genesis record decode until PRF-003. hint_count/snapshot_count 0 stubs."
+      - tests/api_007_tests.rs
+    notes: >
+      CoinStoreStats + CoinStore::stats(). Aggregates from coin_records scan (bincode or legacy genesis bytes)
+      until PRF-003; hint/snapshot CF key counts; SparseMerkleTree::root_observed for &self state_root.
+      apply_block/rollback/snapshot parity tests deferred per API-007.md.
 
   - id: API-008
     section: "Snapshot Types"
