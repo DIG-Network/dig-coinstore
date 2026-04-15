@@ -80,6 +80,32 @@ pub const ALL_COLUMN_FAMILIES: &[&str] = &[
     CF_METADATA,
 ];
 
+/// Per-column-family RocksDB `write_buffer_size` (bytes) from STO-002 “Per-CF Configuration Summary”.
+///
+/// **Invariant:** element `i` applies to `ALL_COLUMN_FAMILIES[i]`. The RocksDB backend
+/// (`src/storage/rocksdb.rs`, feature `rocksdb-storage`) and `tests/sto_002_tests.rs` rely on this
+/// alignment so tuning stays
+/// single-sourced (STO-002 § Per-CF Configuration Summary, “Write Buffer” column).
+///
+/// # Requirements: STO-002
+/// # Spec: docs/requirements/domains/storage/specs/STO-002.md
+pub const STO002_ROCKS_WRITE_BUFFER_BYTES: [usize; 12] = [
+    64 * 1024 * 1024, // coin_records
+    32 * 1024 * 1024, // coin_by_puzzle_hash
+    32 * 1024 * 1024, // unspent_by_puzzle_hash
+    16 * 1024 * 1024, // coin_by_parent
+    16 * 1024 * 1024, // coin_by_confirmed_height
+    16 * 1024 * 1024, // coin_by_spent_height
+    16 * 1024 * 1024, // hints
+    16 * 1024 * 1024, // hints_by_value
+    64 * 1024 * 1024, // merkle_nodes
+    16 * 1024 * 1024, // archive_coin_records
+    8 * 1024 * 1024,  // state_snapshots
+    4 * 1024 * 1024,  // metadata
+];
+
+const _: () = assert!(ALL_COLUMN_FAMILIES.len() == STO002_ROCKS_WRITE_BUFFER_BYTES.len());
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Key encoding helpers
 // ─────────────────────────────────────────────────────────────────────────────

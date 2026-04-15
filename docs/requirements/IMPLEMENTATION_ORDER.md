@@ -32,7 +32,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 ## Phase 2: Storage Backends
 
 - [x] STO-001 — Storage trait (backend-agnostic interface)
-- [ ] STO-002 — RocksDB backend with column families
+- [x] STO-002 — RocksDB backend with column families
 - [ ] STO-003 — LMDB backend with named databases
 - [ ] STO-004 — Bloom filter configuration (full bloom + prefix bloom)
 - [ ] STO-005 — WriteBatch atomic block commits (RocksDB)

@@ -143,7 +143,13 @@ pub struct CoinStoreConfig {
     /// RocksDB `write_buffer_size` (memtable budget per column family group).
     pub rocksdb_write_buffer_size: usize,
 
-    /// RocksDB `max_open_files`.
+    /// RocksDB `max_open_files` (API-003 / SPEC §2.6 default `1000`).
+    ///
+    /// **RocksDB engine note:** `RocksDbBackend` in `src/storage/rocksdb.rs` opens with FIFO compaction on the
+    /// `state_snapshots` column family (STO-002 / STO-006). The upstream
+    /// `rocksdb` crate requires `max_open_files = -1` in that configuration, so the backend **does not**
+    /// apply this field when opening the DB. The field and [`Self::with_rocksdb_max_open_files`] remain for
+    /// forward compatibility, tests that assert config round-trips, and any alternate layout that drops FIFO.
     pub rocksdb_max_open_files: i32,
 
     /// When true, RocksDB uses a block-based bloom filter (see [`BLOOM_FILTER_BITS_PER_KEY`]).
@@ -212,7 +218,7 @@ impl CoinStoreConfig {
         self
     }
 
-    /// Builder: RocksDB `max_open_files`.
+    /// Builder: RocksDB `max_open_files` (stored on config; see [`CoinStoreConfig::rocksdb_max_open_files`] for when it applies).
     pub fn with_rocksdb_max_open_files(mut self, count: i32) -> Self {
         self.rocksdb_max_open_files = count;
         self
