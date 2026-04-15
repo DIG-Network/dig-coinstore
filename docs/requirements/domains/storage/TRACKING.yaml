@@ -87,10 +87,13 @@ items:
   - id: STO-007
     section: "Feature Gates"
     summary: "Feature flags: lmdb-storage, rocksdb-storage, full-storage. Default: rocksdb-storage"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/storage/specs/STO-007.md"
-    tests: []
-    notes: ""
+    tests:
+      - tests/sto_007_tests.rs
+    notes: >
+      `compile_error!` in `src/lib.rs` when neither backend feature; `open_storage_backend` in `src/storage/mod.rs`
+      + `CoinStore` delegation; nested `cargo check --no-default-features` in sto_007_tests proves diagnostic.
 
   - id: STO-008
     section: "Serialization"
