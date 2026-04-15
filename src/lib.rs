@@ -27,7 +27,7 @@
 //! | [`coin_store`] | Primary public API struct | API-001 |
 //! | [`config`] | Configuration types and constants | API-003 |
 //! | [`error`] | Error enum | API-004 |
-//! | [`types`] | Domain types (CoinRecord, BlockData, etc.) | API-002, API-005..009 |
+//! | [`types`] | Domain types (CoinRecord, BlockData, etc.) | API-002, API-005, API-006..009 |
 //! | [`block_apply`] | Block application pipeline | BLK-001..014 |
 //! | [`rollback`] | Rollback / reorg recovery | RBK-001..007 |
 //! | [`queries`] | Coin state queries | QRY-001..011 |
@@ -105,12 +105,12 @@ pub mod error;
 pub use error::CoinStoreError;
 
 /// Domain types: CoinRecord, BlockData, CoinAddition, result structs, type aliases.
-/// See: docs/requirements/domains/crate_api/specs/API-002.md
+/// See: API-002, API-005 (`docs/requirements/domains/crate_api/specs/`)
 pub mod types;
 
 // Wire-shaped coin row for interop (see `types` module doc: mirrors upstream `CoinRecord` until
 // `chia-protocol` in the `dig-clvm` graph exposes it; then replace with `pub use chia_protocol::CoinRecord as ChiaCoinRecord`).
-pub use types::{ChiaCoinRecord, CoinId, CoinRecord, PuzzleHash};
+pub use types::{BlockData, ChiaCoinRecord, CoinAddition, CoinId, CoinRecord, PuzzleHash};
 
 /// Block application pipeline (Phase 1 validation + Phase 2 mutation).
 /// See: docs/requirements/domains/block_application/specs/

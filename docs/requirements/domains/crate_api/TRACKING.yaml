@@ -78,10 +78,17 @@ items:
   - id: API-005
     section: "Block Input Types"
     summary: "BlockData and CoinAddition structs"
-    status: draft
+    status: verified
     spec_ref: "docs/requirements/domains/crate_api/specs/API-005.md"
-    tests: []
-    notes: "BlockData: 9 fields for pre-validated block state changes. CoinAddition: coin_id, coin, same_as_parent."
+    tests:
+      - vv_req_api_005_block_data_all_nine_fields_accessible
+      - vv_req_api_005_block_data_empty_hints_and_none_state_root
+      - vv_req_api_005_block_data_expected_state_root_some
+      - vv_req_api_005_coin_addition_all_three_fields_accessible
+      - vv_req_api_005_coin_id_mismatch_still_constructible_until_blk_validation
+      - vv_req_api_005_serde_bincode_roundtrip_block_data
+      - vv_req_api_005_serde_bincode_roundtrip_coin_addition
+    notes: "Defined in src/types.rs; pub use at crate root. Serde+PartialEq for tests and STO-008 path. Integration tests from API-005 spec deferred to BLK-*."
 
   - id: API-006
     section: "Result Types"
