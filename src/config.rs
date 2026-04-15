@@ -98,11 +98,11 @@ pub fn default_storage_backend_for_features() -> StorageBackend {
     {
         #[cfg(feature = "rocksdb-storage")]
         {
-            return StorageBackend::Lmdb;
+            StorageBackend::Lmdb
         }
         #[cfg(not(feature = "rocksdb-storage"))]
         {
-            return StorageBackend::Lmdb;
+            StorageBackend::Lmdb
         }
     }
     #[cfg(not(feature = "lmdb-storage"))]

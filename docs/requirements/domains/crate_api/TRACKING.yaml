@@ -73,7 +73,9 @@ items:
       - vv_req_api_004_bincode_decode_maps_to_deserialization_error
       - vv_req_api_004_from_rocksdb_error_stringifies
       - vv_req_api_004_from_heed_error_stringifies
-    notes: "Crate-root pub use; decode path uses from_bincode_deserialize; heed/rocksdb From behind features. RollbackAboveTip deferred to API-010 per NORMATIVE."
+    notes: >
+      Crate-root pub use; decode path uses from_bincode_deserialize; heed/rocksdb From behind features.
+      API-004 remains the 15 base variants; RollbackAboveTip is the separate API-010 variant (see tests/api_010_tests.rs).
 
   - id: API-005
     section: "Block Input Types"
@@ -95,8 +97,8 @@ items:
       - tests/api_006_tests.rs
     notes: >
       ApplyBlockResult / RollbackResult: NORMATIVE fields + Serialize/Deserialize. CoinStore::apply_block,
-      rollback_to_block, rollback_n_blocks: signatures + NotInitialized gate + BLK/RBK stubs (StorageError prefix)
-      until pipelines ship.
+      rollback_to_block, rollback_n_blocks: signatures + NotInitialized gate; rollback_to_block returns
+      RollbackAboveTip when target > height (API-010) then RBK stub (StorageError prefix) until pipelines ship.
 
   - id: API-007
     section: "Statistics"
@@ -136,7 +138,11 @@ items:
   - id: API-010
     section: "RollbackAboveTip and is_unspent"
     summary: "CoinStoreError::RollbackAboveTip { target: i64, current: u64 } variant. CoinStore::is_unspent(&self, coin_id: &CoinId) -> bool with O(1) lock-free semantics."
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/crate_api/specs/API-010.md"
-    tests: []
-    notes: ""
+    tests:
+      - tests/api_010_tests.rs
+    notes: >
+      RollbackAboveTip in error.rs; rollback_to_block checks target > height before RBK stub. HashSet<CoinId>
+      unspent_ids on CoinStore: init_genesis inserts, with_config rebuild, restore replaces; is_unspent is
+      contains() only (PRF-001 seed, SPEC §13.2). BLK-008 will remove on spend.

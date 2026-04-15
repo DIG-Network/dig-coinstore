@@ -228,7 +228,10 @@ fn vv_req_api_006_coin_store_rollback_to_block_result_type() {
     let mut store = CoinStore::new(dir.path()).unwrap();
     store.init_genesis(vec![], 1_700_000_000).unwrap();
 
-    let out: Result<RollbackResult, CoinStoreError> = store.rollback_to_block(3);
+    // Height is 0 after empty genesis; target 0 is not strictly above tip, so the RBK stub path
+    // still returns `StorageError`. (Target > tip is [`CoinStoreError::RollbackAboveTip`] — API-010,
+    // `tests/api_010_tests.rs`.)
+    let out: Result<RollbackResult, CoinStoreError> = store.rollback_to_block(0);
     let err = out.expect_err("rollback_to_block is stub until RBK-001+");
     match err {
         CoinStoreError::StorageError(msg) => {

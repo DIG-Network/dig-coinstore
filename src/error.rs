@@ -31,7 +31,7 @@ use crate::types::CoinId;
 /// Each variant is a typed, matchable failure mode. Structured fields carry the data needed for
 /// tests and for operator-facing messages via `thiserror`’s [`Display`](std::fmt::Display).
 ///
-/// **Variant count:** 15 per NORMATIVE API-004. `RollbackAboveTip` is added under API-010.
+/// **Variant count:** 15 normative API-004 variants **plus** [`CoinStoreError::RollbackAboveTip`] (API-010).
 ///
 /// # Requirement: API-004
 /// # Spec: docs/requirements/domains/crate_api/specs/API-004.md
@@ -88,6 +88,17 @@ pub enum CoinStoreError {
     /// Operation requires genesis but [`init_genesis`](crate::coin_store::CoinStore::init_genesis) has not run.
     #[error("coinstate not initialized (call init_genesis first)")]
     NotInitialized,
+
+    // -- Rollback (API-010; RBK domain) --
+    /// Rollback target height is strictly above the current chain tip (invalid target).
+    ///
+    /// **`target` as `i64`:** Accepts signed inputs from callers (including negative placeholders per RBK-001)
+    /// while `current` stays `u64` like [`crate::coin_store::CoinStore::height`].
+    ///
+    /// **Not an error:** `target == current` is a legal no-op once RBK is implemented; only `target > current`
+    /// triggers this variant ([`API-010`](../../docs/requirements/domains/crate_api/specs/API-010.md) § RollbackAboveTip Trigger).
+    #[error("cannot rollback: target height {target} above current height {current}")]
+    RollbackAboveTip { target: i64, current: u64 },
 
     // -- Query (QRY-007 batching) --
     /// Too many puzzle hashes in one batch request (SQL parameter parity / memory bounds).
