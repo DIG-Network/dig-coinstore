@@ -18,13 +18,18 @@ use std::collections::HashMap;
 use chia_protocol::Bytes32;
 use serde::{Deserialize, Serialize};
 
-use super::{child_path, empty_hash, merkle_node_hash, SparseMerkleTree, SMT_HEIGHT};
+use super::{child_path, empty_hash, merkle_node_hash, MerkleError, SparseMerkleTree, SMT_HEIGHT};
 
 /// A proof of inclusion or exclusion in the sparse Merkle tree.
 ///
 /// Contains the 256 sibling hashes along the path from the leaf to the root.
 /// For an inclusion proof, `value` is `Some(leaf_hash)`. For an exclusion
 /// proof, `value` is `None` (the leaf at this position is empty).
+///
+/// **MRK-004 wire shape:** NORMATIVE text names a single `leaf_value: Bytes32` (inclusion digest
+/// vs empty-leaf hash at level 0 for absence; see [`empty_hash`](crate::merkle::empty_hash)). We
+/// keep `Option<Bytes32>` for serde/back-compat and expose the canonical 32-byte leaf via
+/// [`Self::leaf_value`].
 ///
 /// # Verification
 ///
@@ -93,6 +98,18 @@ impl SparseMerkleProof {
 
         current == *expected_root
     }
+
+    /// MRK-004: canonical 32-byte leaf payload for wire / light-client consumers.
+    ///
+    /// Maps `value = Some(h)` → `h`, and `value = None` → MRK-002 empty leaf hash
+    /// [`empty_hash`](crate::merkle::empty_hash)`(0)` (non-inclusion at this key).
+    #[must_use]
+    pub fn leaf_value(&self) -> Bytes32 {
+        match self.value {
+            Some(h) => h,
+            None => empty_hash(0),
+        }
+    }
 }
 
 // Add a public accessor for get_bit so proofs can use it.
@@ -106,13 +123,15 @@ impl SparseMerkleTree {
         Self::get_bit(key, n)
     }
 
-    /// Generate a proof for a key (inclusion or exclusion).
+    /// Build a sparse Merkle path proof for `key` from the **in-memory** leaf multiset.
     ///
-    /// If the key exists in the tree, generates an inclusion proof.
-    /// If the key does not exist, generates an exclusion proof (value = None).
-    ///
-    /// # Requirement: MRK-004
-    pub fn get_proof(&self, key: &Bytes32) -> SparseMerkleProof {
+    /// Sibling digests for empty opposing subtrees resolve through [`empty_hash`] / subtree
+    /// recomputation (MRK-002). When the full leaf map is resident—typical after
+    /// [`SparseMerkleTree::load_from_store`] with the authoritative coinset—this matches the
+    /// persisted state root without reading `merkle_nodes` rows on the hot path. Pulling internal
+    /// digests from disk for **partial** leaf hydration remains a follow-up optimization tied to
+    /// MRK-003 lazy reads (see `docs/requirements/domains/merkle/TRACKING.yaml` MRK-003 notes).
+    fn build_sparse_proof_for_key(&self, key: &Bytes32) -> SparseMerkleProof {
         let mut siblings = Vec::with_capacity(SMT_HEIGHT);
         let leaf_refs: Vec<(&Bytes32, &Bytes32)> = self.leaves.iter().collect();
         let mut current_leaves = leaf_refs;
@@ -152,5 +171,40 @@ impl SparseMerkleTree {
             value: self.leaves.get(key).copied(),
             siblings,
         }
+    }
+
+    /// MRK-004 normative API: generate a Merkle proof for `coin_id` against the **current** tree.
+    ///
+    /// Returns [`MerkleError::ProofRequiresCleanTree`] if MRK-001 deferred recompute has not run
+    /// since the last mutation (`is_dirty()`). This prevents serving proofs against an ambiguous
+    /// “pending” state—call [`SparseMerkleTree::root`] first (block boundary), then `get_coin_proof`.
+    ///
+    /// **Inclusion vs exclusion:** existing keys yield `value = Some(leaf_hash)`; absent keys use
+    /// `value = None`, with [`SparseMerkleProof::leaf_value`] exposing MRK-004’s always-32-byte
+    /// wire field (empty leaf hash when absent).
+    ///
+    /// # Errors
+    ///
+    /// - [`MerkleError::ProofRequiresCleanTree`] — leaf map changed since last `root()`.
+    ///
+    /// # Spec
+    ///
+    /// `docs/requirements/domains/merkle/specs/MRK-004.md`
+    pub fn get_coin_proof(&self, coin_id: &Bytes32) -> Result<SparseMerkleProof, MerkleError> {
+        if self.is_dirty() {
+            return Err(MerkleError::ProofRequiresCleanTree);
+        }
+        Ok(self.build_sparse_proof_for_key(coin_id))
+    }
+
+    /// Generate a proof for a key (inclusion or exclusion) **without** enforcing a clean tree.
+    ///
+    /// Prefer [`Self::get_coin_proof`] for production paths that must respect MRK-004’s dirty-tree
+    /// rule. This helper remains for internal diagnostics and tests that intentionally read proofs
+    /// mid-mutation (still deterministic given the current partial leaf map).
+    ///
+    /// # Requirement: MRK-004 (structural sibling walk; see also [`Self::get_coin_proof`])
+    pub fn get_proof(&self, key: &Bytes32) -> SparseMerkleProof {
+        self.build_sparse_proof_for_key(key)
     }
 }

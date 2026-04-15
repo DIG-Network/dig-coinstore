@@ -82,17 +82,19 @@ mod rocks_mrk003 {
         let mut tree = SparseMerkleTree::new();
         let k1 = Bytes32::from([0x11u8; 32]);
         let k2 = Bytes32::from([0x22u8; 32]);
-        tree.batch_insert(&[
-            (k1, merkle_leaf_hash(b"a")),
-            (k2, merkle_leaf_hash(b"b")),
-        ])
-        .unwrap();
+        tree.batch_insert(&[(k1, merkle_leaf_hash(b"a")), (k2, merkle_leaf_hash(b"b"))])
+            .unwrap();
         let _ = tree.root();
-        let sample_key = *tree
+        // `dirty_nodes` mixes Put and Delete ops; iteration order is hash-randomized, so picking
+        // `keys().next()` can land on a Delete row (nothing to `get` after flush). Require a Put.
+        let sample_key = tree
             .dirty_nodes()
-            .keys()
-            .next()
-            .expect("internal walk should enqueue ≥1 merkle_nodes row for two leaves");
+            .iter()
+            .find_map(|(k, op)| match op {
+                MerkleNodePersistOp::Put(_) => Some(*k),
+                MerkleNodePersistOp::Delete => None,
+            })
+            .expect("internal walk should enqueue ≥1 merkle_nodes Put for two leaves");
 
         let mut batch = WriteBatch::new();
         tree.flush_to_batch(&mut batch).unwrap();
@@ -102,10 +104,17 @@ mod rocks_mrk003 {
             .get(schema::CF_MERKLE_NODES, &sample_key)
             .unwrap()
             .expect("flush should have written the sampled merkle_nodes key");
-        assert_eq!(persisted.len(), 32, "MRK-003 value encoding is a single 32-byte digest");
+        assert_eq!(
+            persisted.len(),
+            32,
+            "MRK-003 value encoding is a single 32-byte digest"
+        );
 
         let meta_key = schema::metadata_key(MERKLE_STATE_ROOT_META_KEY);
-        let meta = backend.get(schema::CF_METADATA, &meta_key).unwrap().expect("metadata root");
+        let meta = backend
+            .get(schema::CF_METADATA, &meta_key)
+            .unwrap()
+            .expect("metadata root");
         assert_eq!(meta.len(), 32);
     }
 
@@ -154,7 +163,13 @@ mod rocks_mrk003 {
             Some(b"mrk003_atomic_smoke_val".as_slice())
         );
         let meta_key = schema::metadata_key(MERKLE_STATE_ROOT_META_KEY);
-        assert_eq!(backend.get(schema::CF_METADATA, &meta_key).unwrap().map(|v| v.len()), Some(32));
+        assert_eq!(
+            backend
+                .get(schema::CF_METADATA, &meta_key)
+                .unwrap()
+                .map(|v| v.len()),
+            Some(32)
+        );
     }
 
     /// **MRK-003 §5:** [`SparseMerkleTree::load_from_store`] reads exactly the metadata root row and
@@ -240,9 +255,9 @@ mod rocks_mrk003 {
         );
     }
 
-    /// **MRK-003 cross MRK-004:** After [`load_from_store`], [`SparseMerkleTree::get_proof`] still builds
-    /// siblings purely from the in-memory leaf multiset; verification against the loaded metadata root
-    /// proves end-to-end consistency for light-client style checks (lazy CF sibling fetches land in MRK-004).
+    /// **MRK-003 cross MRK-004:** After [`load_from_store`], [`SparseMerkleTree::get_coin_proof`] still
+    /// builds siblings from the resident leaf multiset; verification against the loaded metadata root
+    /// proves end-to-end consistency (optional lazy `merkle_nodes` reads without full leaves remain future work).
     #[test]
     fn vv_req_mrk_003_proof_verifies_after_load() {
         let (_dir, backend) = open_backend();
@@ -259,7 +274,7 @@ mod rocks_mrk003 {
 
         let mut loaded = SparseMerkleTree::load_from_store(&backend, leaves).unwrap();
         let root = loaded.root();
-        let proof = loaded.get_proof(&key);
+        let proof = loaded.get_coin_proof(&key).unwrap();
         assert!(
             proof.verify(&root),
             "MRK-005 verifier must accept MRK-004 proof for loaded tree"
@@ -316,7 +331,10 @@ mod lmdb_mrk003 {
         assert_eq!(loaded.root(), expect);
 
         let meta_key = schema::metadata_key(MERKLE_STATE_ROOT_META_KEY);
-        let meta = backend.get(schema::CF_METADATA, &meta_key).unwrap().expect("metadata root");
+        let meta = backend
+            .get(schema::CF_METADATA, &meta_key)
+            .unwrap()
+            .expect("metadata root");
         assert_eq!(meta.len(), 32);
     }
 }
