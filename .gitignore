@@ -3,3 +3,4 @@
 
 # Repomix output packs (regenerate locally per docs/prompt/start.md)
 /.repomix/
+.gitnexus
