@@ -102,18 +102,19 @@ fn vv_req_api_010_rollback_above_tip_triggered_when_target_gt_height() {
     );
 }
 
-/// **`target == current` is not `RollbackAboveTip`** — still hits RBK stub (API-010 edge case).
+/// **`target == current` is not `RollbackAboveTip`** — it's a no-op (RBK-001).
+///
+/// After RBK-001 implementation, rolling back to the current height returns Ok with empty result.
 #[cfg(feature = "rocksdb-storage")]
 #[test]
-fn vv_req_api_010_rollback_equal_height_not_above_tip_goes_to_stub() {
+fn vv_req_api_010_rollback_equal_height_is_noop() {
     let dir = helpers::temp_dir();
     let mut store = CoinStore::new(dir.path()).unwrap();
     store.init_genesis(vec![], 1).unwrap();
-    let err = store.rollback_to_block(0).unwrap_err();
-    assert!(
-        matches!(err, CoinStoreError::StorageError(ref s) if s.contains("rollback_to_block:")),
-        "unexpected: {err:?}"
-    );
+    let result = store.rollback_to_block(0).unwrap();
+    assert_eq!(result.new_height, 0, "Rolling back to current height is a no-op");
+    assert_eq!(result.coins_deleted, 0);
+    assert_eq!(result.coins_unspent, 0);
 }
 
 /// **Test plan `test_is_unspent_true`:** genesis coin IDs are tracked as unspent.
