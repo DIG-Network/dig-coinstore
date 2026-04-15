@@ -147,18 +147,36 @@ impl WriteBatch {
 
 /// Trait abstracting over key-value storage backends (RocksDB, LMDB).
 ///
-/// All storage access in dig-coinstore goes through this trait. Concrete
-/// implementations are selected at compile time via feature gates.
+/// All storage access in dig-coinstore goes through this trait. [`crate::coin_store::CoinStore`]
+/// holds `Box<dyn StorageBackend>` (aliased internally as `KvStore`) so block application, queries,
+/// and snapshots stay engine-agnostic ([`STO-001.md`](../../docs/requirements/domains/storage/specs/STO-001.md)).
+///
+/// # Method semantics (normative summary)
+///
+/// | Method | Contract |
+/// |--------|----------|
+/// | [`Self::get`] | `Ok(None)` if key missing — **not** an error ([`STO-001`](../../docs/requirements/domains/storage/specs/STO-001.md) § Method Semantics). |
+/// | [`Self::put`] | Upsert; replaces existing value. |
+/// | [`Self::delete`] | **Idempotent:** missing key is `Ok(())` (both engines normalize this). |
+/// | [`Self::batch_write`] | All-or-nothing; empty batch is a no-op ([`STO-005`](../../docs/requirements/domains/storage/specs/STO-005.md) for WAL/fsync depth). |
+/// | [`Self::prefix_scan`] | Keys with prefix `prefix`, ordered lexicographically by key (iterator contract). |
+/// | [`Self::flush`] | Best-effort durability hint (Rocks WAL flush; LMDB `force_sync`). |
+/// | [`Self::compact`] | Engine-specific maintenance (Rocks manual compaction; LMDB currently no-op). |
 ///
 /// # Thread safety
 ///
-/// Implementations MUST be `Send + Sync` to support concurrent access
-/// from the CoinStore's RwLock-protected methods (CON-001, CON-002).
+/// Implementations MUST be `Send + Sync` so callers can share `Arc<dyn StorageBackend>` across
+/// threads and satisfy [`CON-001`](../../docs/requirements/domains/concurrency/specs/CON-001.md).
 ///
 /// # Column families
 ///
-/// The `cf` parameter in each method refers to a column family name from
-/// [`schema`]. Invalid CF names should return `StorageError::UnknownColumnFamily`.
+/// The `cf` parameter names logical stores from [`schema`] (same string table for Rocks column
+/// families and LMDB named databases). Unknown `cf` → [`StorageError::UnknownColumnFamily`].
+///
+/// # Verification
+///
+/// Behavioral contract: [`tests/sto_001_tests.rs`](../../tests/sto_001_tests.rs) (per-domain file for STO-001).
+/// Compile-time surface: [`tests/str_003_tests.rs`](../../tests/str_003_tests.rs) (STR-003 overlap).
 ///
 /// # Requirement: STO-001
 /// # Spec: docs/requirements/domains/storage/specs/STO-001.md

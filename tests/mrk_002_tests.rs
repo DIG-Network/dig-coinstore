@@ -1,4 +1,17 @@
 //! # MRK-002 Tests — Memoized Empty Hashes
+//!
+//! Verifies **MRK-002**: pre-computed empty subtree hashes for all 257 levels (0..=256),
+//! initialized lazily via `OnceLock` and accessed in O(1).
+//!
+//! # Requirement: MRK-002
+//! # SPEC.md: §9 (Merkle Tree), §1.6 #1 (Merkle Commitment)
+//!
+//! ## How these tests prove the requirement
+//!
+//! - **Leaf base case:** `empty_hash(0)` = `merkle_leaf_hash([0u8; 32])` — the domain-separated hash.
+//! - **Recursive consistency:** All 256 levels satisfy `empty_hash(n) = node_hash(empty_hash(n-1), empty_hash(n-1))`.
+//! - **Root cross-check:** Independent iterative computation matches `empty_hash(256)`.
+//! - **O(1) lookup:** Repeated calls return the same value (memoized, thread-safe via `OnceLock`).
 
 mod helpers;
 

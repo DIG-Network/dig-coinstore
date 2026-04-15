@@ -1,4 +1,18 @@
 //! # STR-006 Tests — Test Infrastructure
+//!
+//! Verifies **STR-006**: test helpers, coin builders, hash utilities, temp dir management, and
+//! block builder patterns in `tests/helpers/mod.rs`.
+//!
+//! # Requirement: STR-006
+//! # SPEC.md: §2.1 (Coin Identity — `sha256(parent || puzzle_hash || amount)`),
+//! #          §2.4 (BlockData), §2.7 (Constants — reward coins, timing)
+//!
+//! ## How these tests prove the requirement
+//!
+//! - **Deterministic builders:** `test_coin` uses `chia-sha2` hashes for realistic bit distribution.
+//! - **Block builder:** `TestBlockParams::at_height(h)` produces correct coinbase rules
+//!   (0 at h=0, ≥ 2 otherwise — [SPEC.md §1.5 #11](../../docs/resources/SPEC.md)).
+//! - **Temp dir lifecycle:** auto-cleanup prevents test pollution in CI.
 
 mod helpers;
 

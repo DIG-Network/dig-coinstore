@@ -1,4 +1,19 @@
 //! # STR-003 Tests — Storage Module
+//!
+//! Verifies **STR-003** (storage module layout) and **STO-001** (`StorageBackend` trait).
+//! Covers trait surface, schema constants, composite key encoding, and RocksDB backend integration.
+//!
+//! # Requirement: STR-003, STO-001
+//! # SPEC.md: §7 (Storage Architecture), §7.2 (Column Families), §1.3 #1 (Dual Backend),
+//! #          §1.3 #10,11 (Composite Key Decisions), §1.6 #4 (Embedded KV), §1.6 #17 (WriteBatch)
+//!
+//! ## How these tests prove the requirement
+//!
+//! - **Trait surface:** `Send + Sync` bound check fails to compile if missing (CON-001).
+//! - **Schema:** 12 CF name constants uniqueness check matches [SPEC.md §7.2](../../docs/resources/SPEC.md).
+//! - **Key encoding:** Round-trip tests prove lossless encoding; sort-order test confirms big-endian
+//!   height encoding preserves numeric ordering for range scans.
+//! - **Backend integration:** `put`/`get`/`delete`, `batch_write`, `prefix_scan` exercised on real RocksDB.
 
 mod helpers;
 
@@ -6,7 +21,7 @@ mod helpers;
 // STR-003 / STO-001: StorageBackend trait + schema
 // Requirement: docs/requirements/domains/crate_structure/specs/STR-003.md
 // Requirement: docs/requirements/domains/storage/specs/STO-001.md
-// SPEC.md: Section 7 (Storage Architecture)
+// SPEC.md: §7 (Storage Architecture), §7.2 (Column Families)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Verifies STR-003 / STO-001: The `StorageBackend` trait exists with all
