@@ -12,7 +12,7 @@
 //! - **API-006:** [`ApplyBlockResult`], [`RollbackResult`]
 //! - **API-007:** [`CoinStoreStats`]
 //! - **API-008:** [`CoinStoreSnapshot`]
-//! - API-009: additional types (stub tracked in that spec)
+//! - **API-009:** [`CoinId`], [`PuzzleHash`], [`UnspentLineageInfo`]
 //!
 //! ## `ChiaCoinRecord` vs `chia_protocol::CoinRecord`
 //!
@@ -386,16 +386,15 @@ pub struct CoinStoreStats {
 /// standardizes this struct for bincode persistence and future checkpoint sync ([`SPEC.md`](../../docs/resources/SPEC.md)
 /// §1.6 improvement #6, §3.14; [API-008](docs/requirements/domains/crate_api/specs/API-008.md)).
 ///
-/// **`block_hash`:** Tip header hash at capture time — matches [`crate::coin_store::CoinStore::tip_hash`]
-/// when the snapshot is produced by [`crate::coin_store::CoinStore::snapshot`].
+/// **`block_hash`:** Tip header hash at capture time (same role as [`crate::coin_store::CoinStore::tip_hash`]
+/// when produced by a future `CoinStore::snapshot` implementation — tracked under PRF-008).
 ///
 /// **`coins` / `hints`:** Full materialized rows and `(coin_id, hint)` pairs — same `hints` element type as
 /// [`BlockData::hints`] for consistency across APIs.
 ///
 /// **`total_coins` / `total_value`:** Per API-008 field table, `total_coins` SHOULD equal `coins.len()` as `u64`,
 /// and `total_value` SHOULD be the sum of **unspent** [`CoinRecord`] amounts at capture time. The type does
-/// not enforce these invariants; [`crate::coin_store::CoinStore::snapshot`] populates them and
-/// [`crate::coin_store::CoinStore::restore`] validates them before I/O.
+/// not enforce these invariants; `CoinStore::snapshot` (PRF-008) must populate them coherently.
 ///
 /// # Requirement: API-008
 /// # Spec: docs/requirements/domains/crate_api/specs/API-008.md
@@ -419,6 +418,33 @@ pub struct CoinStoreSnapshot {
     pub total_value: u64,
 }
 
-/// Placeholder — API-009 (`UnspentLineageInfo`).
-#[derive(Debug, Clone, Default)]
-pub struct UnspentLineageInfo;
+/// Lineage chain for **one unspent coin**, used when resolving singleton **fast-forward** candidates
+/// ([`SPEC.md`](../../docs/resources/SPEC.md) §2.5, [`QRY-008`](../../docs/requirements/domains/queries/specs/QRY-008.md)).
+///
+/// # Field semantics
+///
+/// - **`coin_id`:** The unspent leaf’s identity (`sha256(parent || puzzle_hash || amount)`), same as
+///   [`Coin::coin_id()`](crate::Coin::coin_id).
+/// - **`parent_id`:** That coin’s `parent_coin_info` (the parent coin’s name / id in Chia terminology).
+/// - **`parent_parent_id`:** The parent coin row’s `parent_coin_info` (grandparent link in the lineage chain).
+///
+/// # Genesis / missing rows
+///
+/// Chia encodes coinbase parents with fixed sentinel bytes; there may be **no** grandparent coin row in the
+/// coinset. Callers still store a [`CoinId`] value (often all-zero bytes) for `parent_parent_id` when the
+/// wallet or mempool has no further ancestor ([`API-009.md`](../../docs/requirements/domains/crate_api/specs/API-009.md) implementation notes).
+///
+/// **Serde:** Not required by API-009; QRY-008 returns this in-process. Add `Serialize`/`Deserialize` only if
+/// an RPC boundary needs a stable wire shape.
+///
+/// # Requirement: API-009
+/// # Spec: docs/requirements/domains/crate_api/specs/API-009.md
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnspentLineageInfo {
+    /// This coin’s id (the unspent singleton or leaf being queried).
+    pub coin_id: CoinId,
+    /// `parent_coin_info` of the coin identified by [`Self::coin_id`].
+    pub parent_id: CoinId,
+    /// `parent_coin_info` of the coin identified by [`Self::parent_id`].
+    pub parent_parent_id: CoinId,
+}
