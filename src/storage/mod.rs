@@ -21,6 +21,7 @@
 //!
 //! **Verification:** behavioral acceptance for [`StorageBackend`] lives in [`tests/sto_001_tests.rs`](../../tests/sto_001_tests.rs)
 //! (RocksDB by default; run with `--no-default-features --features lmdb-storage` for the LMDB slice).
+//! **STO-002 (Rocks column families):** [`tests/sto_002_tests.rs`](../../tests/sto_002_tests.rs).
 
 #[cfg(feature = "rocksdb-storage")]
 pub mod rocksdb;

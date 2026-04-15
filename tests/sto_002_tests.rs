@@ -13,9 +13,13 @@
 //! | Data isolated between CFs | Same key bytes written to two CFs hold distinct values; reading the wrong CF yields `None`. |
 //! | Reopen preserves data + CFs | Drop the backend handle, reopen with a fresh [`RocksDbBackend`], read back the same keys. |
 //! | Implements [`StorageBackend`] (STO-001) | Coerce to `dyn StorageBackend` and exercise `put`/`get`. |
-//! | Per-CF write buffers + compaction profiles | Verified **by construction** in `rocksdb.rs` (see module docs there); this file does not introspect Rocks internal metrics (reserved for future STO-006 property tests). |
+//! | Per-CF write buffers | [`dig_coinstore::storage::schema::STO002_ROCKS_WRITE_BUFFER_BYTES`] is the single source of truth (compile-time length tied to [`ALL_COLUMN_FAMILIES`]); [`vv_req_sto_002_write_buffer_bytes_match_spec_table`] asserts the numeric MiB column from STO-002. |
+//! | Bloom / compaction tuning | Implemented in `src/storage/rocksdb.rs` (`BloomProfile`, FIFO on `state_snapshots`); deeper property assertions are reserved for STO-004 / STO-006. |
+//! | Missing CF on reopen (schema evolution) | [`vv_req_sto_002_missing_cf_created_when_reopening_with_full_descriptor_set`] seeds a DB with only the first 11 families, then proves [`RocksDbBackend::open`] creates the twelfth (`metadata`). |
 //!
 //! **Feature gate:** These tests require `rocksdb-storage` (default crate feature).
+//!
+//! **GitNexus / SocratiCode:** not confirmed in this environment. **Repomix:** `npx repomix@latest src/storage -o .repomix/pack-storage.xml` per `docs/prompt/start.md` before changing storage code.
 
 mod helpers;
 
@@ -25,8 +29,9 @@ mod rocks_sto002 {
 
     use dig_coinstore::config::{CoinStoreConfig, StorageBackend as Engine};
     use dig_coinstore::storage::rocksdb::RocksDbBackend;
-    use dig_coinstore::storage::schema::ALL_COLUMN_FAMILIES;
+    use dig_coinstore::storage::schema::{ALL_COLUMN_FAMILIES, STO002_ROCKS_WRITE_BUFFER_BYTES};
     use dig_coinstore::storage::StorageBackend;
+    use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
     fn open(path: &std::path::Path) -> RocksDbBackend {
         let cfg = CoinStoreConfig::default_with_path(path).with_backend(Engine::RocksDb);
@@ -160,5 +165,75 @@ mod rocks_sto002 {
             db.put(cf, &key, &val).unwrap();
             assert_eq!(db.get(cf, &key).unwrap().as_deref(), Some(val.as_slice()));
         }
+    }
+
+    /// **STO-002 / Test plan `test_rocksdb_missing_cf_created`:** `create_missing_column_families(true)` must
+    /// materialize any new logical store when the on-disk set is a strict subset of [`ALL_COLUMN_FAMILIES`].
+    ///
+    /// **How this proves the requirement:** We open a raw `rocksdb::DB` with only `ALL_COLUMN_FAMILIES[0..11]`
+    /// (eleven names), omitting [`dig_coinstore::storage::schema::CF_METADATA`]. After drop,
+    /// [`RocksDbBackend::open`] supplies descriptors for all twelve families; RocksDB must create `metadata`
+    /// without error. A `put`/`get` round-trip on that CF demonstrates the handle is live, not merely listed.
+    #[test]
+    fn vv_req_sto_002_missing_cf_created_when_reopening_with_full_descriptor_set() {
+        let dir = super::helpers::temp_dir();
+        let path = dir.path();
+        let mut raw_opts = Options::default();
+        raw_opts.create_if_missing(true);
+        raw_opts.create_missing_column_families(true);
+
+        let partial: Vec<ColumnFamilyDescriptor> = ALL_COLUMN_FAMILIES[..11]
+            .iter()
+            .map(|&name| ColumnFamilyDescriptor::new(name, Options::default()))
+            .collect();
+
+        {
+            let raw = DB::open_cf_descriptors(&raw_opts, path, partial).unwrap();
+            let cf0 = raw.cf_handle(ALL_COLUMN_FAMILIES[0]).unwrap();
+            raw.put_cf(cf0, b"seed", b"1").unwrap();
+        }
+
+        let cfg = CoinStoreConfig::default_with_path(path).with_backend(Engine::RocksDb);
+        let backend = RocksDbBackend::open(&cfg).expect("full-schema reopen");
+        let meta = dig_coinstore::storage::schema::CF_METADATA;
+        backend.put(meta, b"after-evo", b"ok").unwrap();
+        assert_eq!(
+            backend.get(meta, b"after-evo").unwrap().as_deref(),
+            Some(b"ok".as_ref())
+        );
+    }
+
+    /// **STO-002 § Per-CF Configuration Summary (Write Buffer):** the byte array must mirror the spec’s MiB column
+    /// in lockstep with [`ALL_COLUMN_FAMILIES`] (same ordering as `schema.rs`).
+    ///
+    /// **Rationale:** `src/storage/rocksdb.rs` indexes this table by position when building
+    /// `ColumnFamilyDescriptor`s; a drift between names and sizes would
+    /// mis-allocate memtables silently.
+    #[test]
+    fn vv_req_sto_002_write_buffer_bytes_match_spec_table() {
+        const MIB: usize = 1024 * 1024;
+        assert_eq!(
+            ALL_COLUMN_FAMILIES.len(),
+            STO002_ROCKS_WRITE_BUFFER_BYTES.len()
+        );
+        let expected: [usize; 12] = [
+            64 * MIB,
+            32 * MIB,
+            32 * MIB,
+            16 * MIB,
+            16 * MIB,
+            16 * MIB,
+            16 * MIB,
+            16 * MIB,
+            64 * MIB,
+            16 * MIB,
+            8 * MIB,
+            4 * MIB,
+        ];
+        assert_eq!(
+            STO002_ROCKS_WRITE_BUFFER_BYTES, expected,
+            "STO002_ROCKS_WRITE_BUFFER_BYTES must match STO-002 write-buffer column for {:?}",
+            ALL_COLUMN_FAMILIES
+        );
     }
 }

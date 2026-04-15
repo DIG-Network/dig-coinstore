@@ -24,13 +24,11 @@ items:
     tests:
       - tests/sto_002_tests.rs
     notes: >
-      tests/sto_002_tests.rs (feature rocksdb-storage): lists CFs on disk (12 logical + optional default),
-      same-key isolation across CFs, reopen preserves rows and CF set, dyn StorageBackend, round-trip put/get
-      in every name from ALL_COLUMN_FAMILIES. Implementation: src/storage/rocksdb.rs — per-CF write buffers,
-      bloom profiles (STO-004-aligned), Level vs FIFO on state_snapshots, global WAL/sync knobs; DB open uses
-      max_open_files=-1 because RocksDB FIFO requires it (CoinStoreConfig.rocksdb_max_open_files stored but not
-      applied at RocksDB open). Deferred from STO-002 test plan: 11-CF→12-CF migration scenario, RocksDB option
-      introspection per CF (see spec acceptance checkboxes).
+      tests/sto_002_tests.rs (feature rocksdb-storage): list_cf vs ALL_COLUMN_FAMILIES, per-CF put/get,
+      isolation, reopen, dyn StorageBackend, 11→12 CF schema-evolution reopen, STO002_ROCKS_WRITE_BUFFER_BYTES
+      vs STO-002 MiB table. src/storage/rocksdb.rs: per-CF options from schema constants, BloomProfile,
+      FIFO on state_snapshots, global WAL/sync/parallelism; max_open_files=-1 for RocksDB FIFO requirement
+      (CoinStoreConfig.rocksdb_max_open_files not applied at open). Deeper per-CF Rocks property checks → STO-004/STO-006.
 
   - id: STO-003
     section: "Backend Implementations"
