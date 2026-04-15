@@ -15,6 +15,7 @@
 //! # Spec: docs/requirements/domains/crate_api/specs/API-001.md
 //! # SPEC.md: Section 3.1
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use chia_protocol::Bytes32;
@@ -22,19 +23,27 @@ use chia_protocol::Bytes32;
 use crate::config::{CoinStoreConfig, StorageBackend as ConfiguredEngine};
 use crate::error::CoinStoreError;
 use crate::merkle::{merkle_leaf_hash, SparseMerkleTree};
-use crate::types::{ApplyBlockResult, BlockData, CoinRecord, CoinStoreStats, RollbackResult};
 #[cfg(feature = "lmdb-storage")]
 use crate::storage::lmdb::LmdbBackend;
 #[cfg(feature = "rocksdb-storage")]
 use crate::storage::rocksdb::RocksDbBackend;
 use crate::storage::schema;
 use crate::storage::{StorageBackend as KvStore, WriteBatch};
+use crate::types::{
+    ApplyBlockResult, BlockData, CoinRecord, CoinStoreSnapshot, CoinStoreStats, RollbackResult,
+};
 
 /// Metadata keys stored in the `metadata` column family.
 const META_HEIGHT: &[u8] = b"chain_height";
 const META_TIP_HASH: &[u8] = b"chain_tip_hash";
 const META_TIMESTAMP: &[u8] = b"chain_timestamp";
 const META_INITIALIZED: &[u8] = b"initialized";
+
+/// Max [`WriteBatch`] operations per [`StorageBackend::batch_write`] flush inside [`CoinStore::restore`].
+///
+/// Mirrors SPEC.md §2.7 `MATERIALIZATION_BATCH_SIZE` (50_000) so restoring huge snapshots does not
+/// build a single multi-gigabyte batch ([`API-008`](../../docs/requirements/domains/crate_api/specs/API-008.md) implementation notes).
+const SNAPSHOT_RESTORE_BATCH_OPS: usize = 50_000;
 
 /// The primary public API for the dig-coinstore crate.
 ///
@@ -193,14 +202,11 @@ impl CoinStore {
         let mut batch = WriteBatch::new();
         let mut merkle_entries: Vec<(Bytes32, Bytes32)> = Vec::new();
 
-        // Insert each genesis coin as a coin record.
+        // Insert each genesis coin as a coin record (legacy 97-byte row until STO-008 bincode-only).
         for (coin, is_coinbase) in &initial_coins {
             let coin_id = coin.coin_id();
-
-            // Serialize a minimal coin record representation.
-            // Full CoinRecord struct (API-002) will replace this.
-            // For now: store the raw coin bytes + metadata.
-            let record_bytes = Self::serialize_genesis_record(coin, *is_coinbase, timestamp)?;
+            let rec = CoinRecord::new(*coin, 0, timestamp, *is_coinbase);
+            let record_bytes = Self::serialize_coin_record_storage_bytes(&rec)?;
 
             // Primary coin record.
             let key = schema::coin_key(&coin_id);
@@ -318,7 +324,7 @@ impl CoinStore {
     /// [`SparseMerkleTree::root_observed`](crate::merkle::SparseMerkleTree::root_observed) so this stays `&self`
     /// per [`docs/resources/SPEC.md`](../../docs/resources/SPEC.md) §3.12. `unspent_count`, `spent_count`,
     /// and `total_unspent_value` are derived from `coin_records` rows (bincode [`CoinRecord`] or the
-    /// temporary genesis byte layout from [`Self::serialize_genesis_record`]) until PRF-003 materialized
+    /// temporary genesis byte layout from [`Self::serialize_legacy_coin_record`]) until PRF-003 materialized
     /// counters replace the scan ([`API-007`](../../docs/requirements/domains/crate_api/specs/API-007.md#performance)).
     ///
     /// **`hint_count` / `snapshot_count`:** key counts in [`schema::CF_HINTS`] and [`schema::CF_STATE_SNAPSHOTS`].
@@ -335,10 +341,7 @@ impl CoinStore {
         let mut total_unspent_value: u64 = 0;
 
         if self.initialized {
-            match self
-                .backend
-                .prefix_scan(schema::CF_COIN_RECORDS, &[])
-            {
+            match self.backend.prefix_scan(schema::CF_COIN_RECORDS, &[]) {
                 Ok(entries) => {
                     for (_key, value) in entries {
                         if let Some(rec) = Self::decode_coin_record_bytes(&value) {
@@ -377,8 +380,265 @@ impl CoinStore {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Snapshots & checkpoints (API-008)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// Capture a serde-stable [`CoinStoreSnapshot`] of the current coinstate.
+    ///
+    /// **Decode path:** Scans [`schema::CF_COIN_RECORDS`] with [`Self::decode_coin_record_bytes`] — the same
+    /// logic as [`Self::stats`] — so legacy genesis rows and future bincode [`CoinRecord`] values both
+    /// appear as typed [`CoinRecord`] entries in `snapshot.coins`.
+    ///
+    /// **`state_root`:** [`SparseMerkleTree::root_observed`](crate::merkle::SparseMerkleTree::root_observed)
+    /// matches [`CoinStoreStats::state_root`] for the same instant (API-007 / API-008 alignment).
+    ///
+    /// **`hints`:** Always empty until HNT-* persists reversible `(coin_id, hint)` pairs we can scan here
+    /// ([`API-008`](../../docs/requirements/domains/crate_api/specs/API-008.md) field table).
+    ///
+    /// # Errors
+    /// [`CoinStoreError::NotInitialized`] before [`Self::init_genesis`].
+    ///
+    /// # Requirement: API-008
+    pub fn snapshot(&self) -> Result<CoinStoreSnapshot, CoinStoreError> {
+        if !self.initialized {
+            return Err(CoinStoreError::NotInitialized);
+        }
+        let entries = self
+            .backend
+            .prefix_scan(schema::CF_COIN_RECORDS, &[])
+            .map_err(|e| {
+                CoinStoreError::StorageError(format!("snapshot: coin_records scan: {e}"))
+            })?;
+
+        let mut coins = HashMap::new();
+        for (_key, value) in entries {
+            if let Some(rec) = Self::decode_coin_record_bytes(&value) {
+                coins.insert(rec.coin_id(), rec);
+            }
+        }
+
+        let total_coins = coins.len() as u64;
+        let total_value: u64 = coins
+            .values()
+            .filter(|r| r.spent_height.is_none())
+            .map(|r| r.coin.amount)
+            .sum();
+
+        Ok(CoinStoreSnapshot {
+            height: self.height,
+            block_hash: self.tip_hash,
+            state_root: self.merkle_tree.root_observed(),
+            timestamp: self.timestamp,
+            coins,
+            hints: Vec::new(),
+            total_coins,
+            total_value,
+        })
+    }
+
+    /// Replace all column-family coinstate with `snapshot` (destructive; clears every CF in
+    /// [`schema::ALL_COLUMN_FAMILIES`] before rewrite).
+    ///
+    /// **Algorithm (API-008 normative restore):**
+    /// 1. Validate `total_coins`, `total_value`, and per-row `HashMap` keys vs [`CoinRecord::coin_id`].
+    /// 2. Recompute the sparse Merkle root from **canonical on-disk encodings** chosen by
+    ///    [`Self::serialize_coin_record_storage_bytes`] *before* mutating storage — catches tampered
+    ///    snapshots without leaving a half-cleared DB on failure.
+    /// 3. Clear all CFs, flush batched inserts (≤ [`SNAPSHOT_RESTORE_BATCH_OPS`] ops per batch), rebuild
+    ///    secondary indices exactly like [`Self::init_genesis`] plus [`schema::CF_COIN_BY_SPENT_HEIGHT`]
+    ///    for spent rows.
+    /// 4. Persist chain metadata from `snapshot.{height, block_hash, timestamp}` and mark initialized.
+    ///
+    /// **Encoding contract:** Legacy **97-byte** rows when [`CoinRecord::ff_eligible`] is `false`
+    /// (matches [`Self::decode_legacy_genesis_coin_record`]); **bincode** when `ff_eligible` is `true`
+    /// so fast-forward metadata survives round-trips once BLK writes such rows.
+    ///
+    /// # Errors
+    /// [`CoinStoreError::StateRootMismatch`] when the recomputed Merkle root disagrees with
+    /// `snapshot.state_root`.
+    ///
+    /// # Requirement: API-008
+    pub fn restore(&mut self, snapshot: CoinStoreSnapshot) -> Result<(), CoinStoreError> {
+        if snapshot.total_coins != snapshot.coins.len() as u64 {
+            return Err(CoinStoreError::StorageError(format!(
+                "restore: total_coins {} != coins.len() {}",
+                snapshot.total_coins,
+                snapshot.coins.len()
+            )));
+        }
+        let recomputed_value: u64 = snapshot
+            .coins
+            .values()
+            .filter(|r| r.spent_height.is_none())
+            .map(|r| r.coin.amount)
+            .sum();
+        if recomputed_value != snapshot.total_value {
+            return Err(CoinStoreError::StorageError(format!(
+                "restore: total_value {} != recomputed unspent sum {recomputed_value}",
+                snapshot.total_value
+            )));
+        }
+        for (map_id, rec) in &snapshot.coins {
+            if *map_id != rec.coin_id() {
+                return Err(CoinStoreError::StorageError(format!(
+                    "restore: map key {map_id:?} != record coin_id {:?}",
+                    rec.coin_id()
+                )));
+            }
+        }
+
+        let mut rows: Vec<(CoinRecord, Vec<u8>)> = Vec::with_capacity(snapshot.coins.len());
+        for rec in snapshot.coins.values() {
+            let bytes = Self::serialize_coin_record_storage_bytes(rec)?;
+            rows.push((rec.clone(), bytes));
+        }
+
+        let mut merkle_entries: Vec<(Bytes32, Bytes32)> = Vec::with_capacity(rows.len());
+        for (rec, bytes) in &rows {
+            merkle_entries.push((rec.coin_id(), merkle_leaf_hash(bytes)));
+        }
+
+        let mut tree = SparseMerkleTree::new();
+        if !merkle_entries.is_empty() {
+            tree.batch_insert(&merkle_entries).map_err(|e| {
+                CoinStoreError::StorageError(format!("restore: merkle batch_insert: {e}"))
+            })?;
+        }
+        let computed_root = tree.root();
+        if computed_root != snapshot.state_root {
+            return Err(CoinStoreError::StateRootMismatch {
+                expected: snapshot.state_root,
+                computed: computed_root,
+            });
+        }
+
+        for cf in schema::ALL_COLUMN_FAMILIES {
+            Self::clear_column_family(&*self.backend, cf)?;
+        }
+
+        let mut batch = WriteBatch::new();
+        for (rec, bytes) in &rows {
+            Self::append_coin_record_to_batch(&mut batch, rec, bytes);
+            if batch.len() >= SNAPSHOT_RESTORE_BATCH_OPS {
+                self.backend.batch_write(std::mem::take(&mut batch))?;
+            }
+        }
+
+        for (coin_id, hint) in &snapshot.hints {
+            let mut fwd = Vec::with_capacity(64);
+            fwd.extend_from_slice(coin_id.as_ref());
+            fwd.extend_from_slice(hint.as_ref());
+            batch.put(schema::CF_HINTS, &fwd, &[]);
+            let mut rev = Vec::with_capacity(64);
+            rev.extend_from_slice(hint.as_ref());
+            rev.extend_from_slice(coin_id.as_ref());
+            batch.put(schema::CF_HINTS_BY_VALUE, &rev, &[]);
+            if batch.len() >= SNAPSHOT_RESTORE_BATCH_OPS {
+                self.backend.batch_write(std::mem::take(&mut batch))?;
+            }
+        }
+
+        batch.put(schema::CF_METADATA, META_INITIALIZED, &[1u8]);
+        batch.put(
+            schema::CF_METADATA,
+            META_HEIGHT,
+            &snapshot.height.to_le_bytes(),
+        );
+        batch.put(
+            schema::CF_METADATA,
+            META_TIP_HASH,
+            snapshot.block_hash.as_ref(),
+        );
+        batch.put(
+            schema::CF_METADATA,
+            META_TIMESTAMP,
+            &snapshot.timestamp.to_le_bytes(),
+        );
+
+        if !batch.is_empty() {
+            self.backend.batch_write(batch)?;
+        }
+
+        self.merkle_tree = tree;
+        self.height = snapshot.height;
+        self.tip_hash = snapshot.block_hash;
+        self.timestamp = snapshot.timestamp;
+        self.initialized = true;
+        Ok(())
+    }
+
+    /// Serialize [`Self::snapshot`] and persist it under [`schema::CF_STATE_SNAPSHOTS`] keyed by
+    /// [`Self::height`] (big-endian height key via [`schema::snapshot_key`]).
+    ///
+    /// Prunes older checkpoints when more than [`CoinStoreConfig::max_snapshots`] rows exist (oldest
+    /// heights deleted first). If `max_snapshots == 0`, pruning is skipped (treated as “do not auto-prune”).
+    ///
+    /// # Requirement: API-008, API-003 (`max_snapshots`)
+    pub fn save_snapshot(&self) -> Result<(), CoinStoreError> {
+        if !self.initialized {
+            return Err(CoinStoreError::NotInitialized);
+        }
+        let snap = self.snapshot()?;
+        let payload = bincode::serialize(&snap)?;
+        let key = schema::snapshot_key(self.height);
+        self.backend
+            .put(schema::CF_STATE_SNAPSHOTS, &key, &payload)?;
+        Self::prune_snapshots_to_limit(&*self.backend, self.config.max_snapshots)?;
+        Ok(())
+    }
+
+    /// Load a retained checkpoint by height, if present.
+    ///
+    /// # Requirement: API-008
+    pub fn load_snapshot(&self, height: u64) -> Result<Option<CoinStoreSnapshot>, CoinStoreError> {
+        let key = schema::snapshot_key(height);
+        match self.backend.get(schema::CF_STATE_SNAPSHOTS, &key)? {
+            None => Ok(None),
+            Some(bytes) => Ok(Some(
+                bincode::deserialize(&bytes).map_err(CoinStoreError::from_bincode_deserialize)?,
+            )),
+        }
+    }
+
+    /// Load the newest retained checkpoint (lexicographic max on big-endian height keys).
+    ///
+    /// # Requirement: API-008
+    pub fn load_latest_snapshot(&self) -> Result<Option<CoinStoreSnapshot>, CoinStoreError> {
+        let heights = self.available_snapshot_heights();
+        let Some(&h) = heights.last() else {
+            return Ok(None);
+        };
+        self.load_snapshot(h)
+    }
+
+    /// Heights currently present in [`schema::CF_STATE_SNAPSHOTS`], ascending.
+    ///
+    /// On scan failure logs a warning and returns an empty list (same resilience pattern as [`Self::stats`]).
+    ///
+    /// # Requirement: API-008
+    pub fn available_snapshot_heights(&self) -> Vec<u64> {
+        match self.backend.prefix_scan(schema::CF_STATE_SNAPSHOTS, &[]) {
+            Ok(entries) => {
+                let mut hs: Vec<u64> = entries
+                    .into_iter()
+                    .map(|(k, _)| schema::height_from_snapshot_key(&k))
+                    .collect();
+                hs.sort_unstable();
+                hs
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "available_snapshot_heights: prefix_scan failed; returning empty"
+                );
+                Vec::new()
+            }
+        }
+    }
+
     /// Decode a `coin_records` value written either as bincode [`CoinRecord`] (STO-008 target) or the
-    /// genesis-era fixed layout from [`Self::serialize_genesis_record`].
+    /// genesis-era fixed layout from [`Self::serialize_legacy_coin_record`].
     fn decode_coin_record_bytes(bytes: &[u8]) -> Option<CoinRecord> {
         if let Ok(rec) = bincode::deserialize::<CoinRecord>(bytes) {
             return Some(rec);
@@ -537,25 +797,99 @@ impl CoinStore {
         ))
     }
 
-    /// Serialize a genesis coin record as bytes.
+    /// Encode [`CoinRecord`] the same way [`Self::restore`] will write `coin_records` values.
     ///
-    /// This is a temporary serialization format used until the full CoinRecord
-    /// struct is defined (API-002). It stores: parent(32) + puzzle_hash(32) +
-    /// amount(8) + confirmed_height(8) + spent_height(8) + coinbase(1) + timestamp(8).
-    fn serialize_genesis_record(
-        coin: &chia_protocol::Coin,
-        is_coinbase: bool,
-        timestamp: u64,
-    ) -> Result<Vec<u8>, CoinStoreError> {
+    /// **Legacy path (`ff_eligible == false`):** fixed 97-byte layout consumed by
+    /// [`Self::decode_legacy_genesis_coin_record`] — this keeps Merkle leaf hashes identical to the
+    /// pre-API-008 genesis writer so [`Self::snapshot`] → [`Self::restore`] is lossless for normal coins.
+    ///
+    /// **Bincode path (`ff_eligible == true`):** STO-008 forward encoding for rows that cannot be
+    /// represented in the legacy tuple (fast-forward eligibility bit).
+    fn serialize_coin_record_storage_bytes(rec: &CoinRecord) -> Result<Vec<u8>, CoinStoreError> {
+        if rec.ff_eligible {
+            Ok(bincode::serialize(rec)?)
+        } else {
+            Ok(Self::serialize_legacy_coin_record(rec))
+        }
+    }
+
+    /// Legacy on-disk `coin_records` layout: parent(32) + puzzle_hash(32) + amount(8) + confirmed_height(8)
+    /// + spent_height_raw(8) + coinbase(1) + timestamp(8) = 97 bytes (`spent_height_raw == 0` means unspent).
+    fn serialize_legacy_coin_record(rec: &CoinRecord) -> Vec<u8> {
         let mut buf = Vec::with_capacity(97);
-        buf.extend_from_slice(coin.parent_coin_info.as_ref());
-        buf.extend_from_slice(coin.puzzle_hash.as_ref());
-        buf.extend_from_slice(&coin.amount.to_le_bytes());
-        buf.extend_from_slice(&0u64.to_le_bytes()); // confirmed_height = 0
-        buf.extend_from_slice(&0u64.to_le_bytes()); // spent_height = 0 (unspent)
-        buf.push(if is_coinbase { 1 } else { 0 });
-        buf.extend_from_slice(&timestamp.to_le_bytes());
-        Ok(buf)
+        buf.extend_from_slice(rec.coin.parent_coin_info.as_ref());
+        buf.extend_from_slice(rec.coin.puzzle_hash.as_ref());
+        buf.extend_from_slice(&rec.coin.amount.to_le_bytes());
+        buf.extend_from_slice(&rec.confirmed_height.to_le_bytes());
+        let spent_raw = rec.spent_height.unwrap_or(0);
+        buf.extend_from_slice(&spent_raw.to_le_bytes());
+        buf.push(if rec.coinbase { 1 } else { 0 });
+        buf.extend_from_slice(&rec.timestamp.to_le_bytes());
+        buf
+    }
+
+    /// Append primary + secondary index writes for one coin row (shared by genesis + restore).
+    fn append_coin_record_to_batch(batch: &mut WriteBatch, rec: &CoinRecord, record_bytes: &[u8]) {
+        let coin_id = rec.coin_id();
+        let key = schema::coin_key(&coin_id);
+        batch.put(schema::CF_COIN_RECORDS, &key, record_bytes);
+
+        let ph_key = schema::puzzle_hash_coin_key(&rec.coin.puzzle_hash, &coin_id);
+        batch.put(schema::CF_COIN_BY_PUZZLE_HASH, &ph_key, coin_id.as_ref());
+        if rec.spent_height.is_none() {
+            batch.put(schema::CF_UNSPENT_BY_PUZZLE_HASH, &ph_key, &[]);
+        }
+
+        let parent_key = schema::parent_coin_key(&rec.coin.parent_coin_info, &coin_id);
+        batch.put(schema::CF_COIN_BY_PARENT, &parent_key, coin_id.as_ref());
+
+        let ch_key = schema::height_coin_key(rec.confirmed_height, &coin_id);
+        batch.put(
+            schema::CF_COIN_BY_CONFIRMED_HEIGHT,
+            &ch_key,
+            coin_id.as_ref(),
+        );
+
+        if let Some(spent_h) = rec.spent_height {
+            let sh_key = schema::height_coin_key(spent_h, &coin_id);
+            batch.put(schema::CF_COIN_BY_SPENT_HEIGHT, &sh_key, coin_id.as_ref());
+        }
+    }
+
+    /// Delete every key in `cf` (used by [`Self::restore`] before full rewrite).
+    fn clear_column_family(backend: &dyn KvStore, cf: &str) -> Result<(), CoinStoreError> {
+        let pairs = backend
+            .prefix_scan(cf, &[])
+            .map_err(|e| CoinStoreError::StorageError(format!("clear_column_family({cf}): {e}")))?;
+        for (k, _) in pairs {
+            backend.delete(cf, &k)?;
+        }
+        Ok(())
+    }
+
+    /// Keep at most `max_snapshots` rows in [`schema::CF_STATE_SNAPSHOTS`] (delete smallest heights first).
+    fn prune_snapshots_to_limit(
+        backend: &dyn KvStore,
+        max_snapshots: usize,
+    ) -> Result<(), CoinStoreError> {
+        if max_snapshots == 0 {
+            return Ok(());
+        }
+        let entries = backend.prefix_scan(schema::CF_STATE_SNAPSHOTS, &[])?;
+        if entries.len() <= max_snapshots {
+            return Ok(());
+        }
+        let mut heights: Vec<u64> = entries
+            .iter()
+            .map(|(k, _)| schema::height_from_snapshot_key(k))
+            .collect();
+        heights.sort_unstable();
+        let excess = entries.len() - max_snapshots;
+        for h in heights.iter().take(excess) {
+            let key = schema::snapshot_key(*h);
+            backend.delete(schema::CF_STATE_SNAPSHOTS, &key)?;
+        }
+        Ok(())
     }
 
     /// Rebuild the Merkle tree from persisted coin records.
