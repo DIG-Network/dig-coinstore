@@ -101,7 +101,7 @@ After completing a requirement: write tests, verify they pass, update TRACKING.y
 
 ## Phase 8: Concurrency
 
-- [ ] CON-001 — `CoinStore` is `Send + Sync`
+- [x] CON-001 — `CoinStore` is `Send + Sync`
 - [ ] CON-002 — RwLock strategy (shared reads, exclusive writes)
 - [ ] CON-003 — MVCC reads during block application (snapshot isolation)
 - [ ] CON-004 — Parallel removal validation via in-memory unspent set
