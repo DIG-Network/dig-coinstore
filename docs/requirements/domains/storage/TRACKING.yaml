@@ -47,10 +47,16 @@ items:
   - id: STO-004
     section: "Bloom Filter Configuration"
     summary: "Full bloom for point lookups, prefix bloom for puzzle hash CFs, no bloom for sequential CFs"
-    status: gap
+    status: verified
     spec_ref: "docs/requirements/domains/storage/specs/STO-004.md"
-    tests: []
-    notes: ""
+    tests:
+      - tests/sto_004_tests.rs
+    notes: >
+      `sto004_bloom_plan_for_column_family` is the single plan source applied in `column_family_descriptor`:
+      classic full-key SST bloom (`set_bloom_filter(_, false)`) at BLOOM_FILTER_BITS_PER_KEY for Full + Prefix32,
+      `set_pin_l0_filter_and_index_blocks_in_cache(true)` when SST bloom enabled, `set_memtable_prefix_bloom_ratio`
+      for Prefix32 only, all suppressed when `CoinStoreConfig::bloom_filter` is false (API-003). Verified by
+      tests/sto_004_tests.rs matrix + open smoke with blooms off.
 
   - id: STO-005
     section: "Atomic Writes"
