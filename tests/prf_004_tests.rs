@@ -19,9 +19,7 @@
 
 mod helpers;
 
-use dig_coinstore::{
-    coin_store::CoinStore, BlockData, Bytes32, CoinAddition,
-};
+use dig_coinstore::{coin_store::CoinStore, BlockData, Bytes32, CoinAddition};
 
 fn make_block(height: u64, parent_hash: Bytes32, block_hash: Bytes32) -> BlockData {
     let coinbase_coins = if height == 0 {
@@ -92,13 +90,21 @@ fn vv_req_prf_004_spend_removes_from_unspent_index() {
     let after = store
         .get_coin_records_by_puzzle_hash(false, &puzzle_hash, 0, u64::MAX)
         .unwrap();
-    assert_eq!(after.len(), 0, "Spent coin should not appear in unspent query");
+    assert_eq!(
+        after.len(),
+        0,
+        "Spent coin should not appear in unspent query"
+    );
 
     // include_spent=true should still return it
     let all = store
         .get_coin_records_by_puzzle_hash(true, &puzzle_hash, 0, u64::MAX)
         .unwrap();
-    assert_eq!(all.len(), 1, "Spent coin should still be in all-inclusive query");
+    assert_eq!(
+        all.len(),
+        1,
+        "Spent coin should still be in all-inclusive query"
+    );
 }
 
 /// **PRF-004:** Rollback restores coins to the unspent puzzle hash index.
@@ -132,7 +138,11 @@ fn vv_req_prf_004_rollback_restores_unspent_index() {
     let restored = store
         .get_coin_records_by_puzzle_hash(false, &puzzle_hash, 0, u64::MAX)
         .unwrap();
-    assert_eq!(restored.len(), 1, "Coin should reappear in unspent index after rollback");
+    assert_eq!(
+        restored.len(),
+        1,
+        "Coin should reappear in unspent index after rollback"
+    );
 }
 
 /// **PRF-004:** Multiple unspent coins with the same puzzle hash are all returned.
@@ -146,10 +156,7 @@ fn vv_req_prf_004_multiple_coins_same_puzzle_hash() {
     let c2 = chia_protocol::Coin::new(helpers::test_hash(2), puzzle_hash, 200);
     let c3 = chia_protocol::Coin::new(helpers::test_hash(3), puzzle_hash, 300);
     store
-        .init_genesis(
-            vec![(c1, false), (c2, false), (c3, false)],
-            1_700_000_000,
-        )
+        .init_genesis(vec![(c1, false), (c2, false), (c3, false)], 1_700_000_000)
         .unwrap();
 
     let results = store

@@ -37,7 +37,10 @@ fn vv_req_mrk_001_empty_tree_root_standalone() {
         empty_hash(SMT_HEIGHT),
         "empty tree commitment must match precomputed empty root"
     );
-    assert!(!tree.is_dirty(), "after root(), cached digest should satisfy is_dirty == false for empty leaves");
+    assert!(
+        !tree.is_dirty(),
+        "after root(), cached digest should satisfy is_dirty == false for empty leaves"
+    );
 }
 
 /// **MRK-001 / `test_batch_insert_single`:** One leaf changes the root from the empty-tree root.
@@ -51,7 +54,10 @@ fn vv_req_mrk_001_batch_insert_single() {
     tree.batch_insert(&[(key, value)]).unwrap();
 
     let new_root = tree.root();
-    assert_ne!(new_root, empty_root, "non-empty leaf set must change the state root");
+    assert_ne!(
+        new_root, empty_root,
+        "non-empty leaf set must change the state root"
+    );
 }
 
 /// **MRK-001 / `test_batch_insert_multiple`:** Many distinct keys, one [`root`] after inserts — deterministic root.
@@ -72,7 +78,11 @@ fn vv_req_mrk_001_batch_insert_multiple() {
 
     let mut tree2 = SparseMerkleTree::new();
     tree2.batch_insert(&entries).unwrap();
-    assert_eq!(tree2.root(), root, "same multiset of (key, leaf_hash) must yield identical root");
+    assert_eq!(
+        tree2.root(),
+        root,
+        "same multiset of (key, leaf_hash) must yield identical root"
+    );
 }
 
 /// **MRK-001 test plan `test_batch_insert_multiple` (100 leaves):** scales the batch path without assuming root internals.
@@ -106,7 +116,10 @@ fn vv_req_mrk_001_batch_update() {
     tree.batch_update(&[(key, v2)]).unwrap();
     let root_v2 = tree.root();
 
-    assert_ne!(root_v1, root_v2, "changing leaf hash must change the committed root");
+    assert_ne!(
+        root_v1, root_v2,
+        "changing leaf hash must change the committed root"
+    );
 }
 
 /// **MRK-001 / `test_batch_remove` + insert/remove inverse:** After remove, root matches never-inserted empty tree.

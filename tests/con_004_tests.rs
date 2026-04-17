@@ -18,9 +18,7 @@
 
 mod helpers;
 
-use dig_coinstore::{
-    coin_store::CoinStore, BlockData, Bytes32, CoinAddition, CoinStoreError,
-};
+use dig_coinstore::{coin_store::CoinStore, BlockData, Bytes32, CoinAddition, CoinStoreError};
 
 /// Build a minimal valid block at the given height.
 fn make_block(height: u64, parent_hash: Bytes32, block_hash: Bytes32) -> BlockData {
@@ -62,9 +60,7 @@ fn vv_req_con_004_large_removal_batch() {
         removal_ids.push(coin.coin_id());
         genesis_coins.push((coin, false));
     }
-    store
-        .init_genesis(genesis_coins, 1_700_000_000)
-        .unwrap();
+    store.init_genesis(genesis_coins, 1_700_000_000).unwrap();
 
     let mut block = make_block(1, Bytes32::from([0u8; 32]), helpers::test_hash(0xC1));
     block.removals = removal_ids.clone();
@@ -95,9 +91,7 @@ fn vv_req_con_004_invalid_removal_rejects_entire_block() {
         removal_ids.push(coin.coin_id());
         genesis_coins.push((coin, false));
     }
-    store
-        .init_genesis(genesis_coins, 1_700_000_000)
-        .unwrap();
+    store.init_genesis(genesis_coins, 1_700_000_000).unwrap();
 
     // Add one fake coin ID
     let fake_id = helpers::test_coin(99, 99, 99).coin_id();
@@ -205,5 +199,8 @@ fn vv_req_con_004_validation_prevents_partial_mutation() {
     // No state change
     assert_eq!(store.height(), 0);
     let rec = store.get_coin_record(&new_coin.coin_id()).unwrap();
-    assert!(rec.is_none(), "Failed block should not persist any additions");
+    assert!(
+        rec.is_none(),
+        "Failed block should not persist any additions"
+    );
 }

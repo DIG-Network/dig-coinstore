@@ -40,7 +40,10 @@ fn vv_req_hnt_002_double_insert_returns_ok() {
     assert!(result1.is_ok(), "First insert must succeed");
 
     let result2 = store.add_hint(&coin_id, &hint);
-    assert!(result2.is_ok(), "Second (duplicate) insert must also succeed");
+    assert!(
+        result2.is_ok(),
+        "Second (duplicate) insert must also succeed"
+    );
 }
 
 /// **HNT-002:** After double insert, the hint appears exactly once in query results.
@@ -135,11 +138,17 @@ fn vv_req_hnt_002_no_panic_on_repeated_duplicates() {
 
     for _ in 0..10 {
         let result = store.add_hint(&coin_id, &hint);
-        assert!(result.is_ok(), "Repeated duplicate insert must not panic or error");
+        assert!(
+            result.is_ok(),
+            "Repeated duplicate insert must not panic or error"
+        );
     }
 
     let count = store.count_hints().unwrap();
-    assert_eq!(count, 1, "Only one entry despite 10 inserts of the same pair");
+    assert_eq!(
+        count, 1,
+        "Only one entry despite 10 inserts of the same pair"
+    );
 }
 
 /// **HNT-002:** Empty hint is silently skipped via add_hint (HNT-001 integration).

@@ -77,7 +77,12 @@ fn vv_req_blk_004_two_coinbase_succeeds() {
     store.init_genesis(vec![], 1_700_000_000).unwrap();
 
     let coinbase = make_coinbase_coins(2, 1);
-    let block = make_block_with_coinbase(1, Bytes32::from([0u8; 32]), helpers::test_hash(0xB1), coinbase);
+    let block = make_block_with_coinbase(
+        1,
+        Bytes32::from([0u8; 32]),
+        helpers::test_hash(0xB1),
+        coinbase,
+    );
     let result = store.apply_block(block);
     assert!(
         result.is_ok(),
@@ -98,7 +103,12 @@ fn vv_req_blk_004_zero_coinbase_fails() {
     let mut store = CoinStore::new(dir.path()).unwrap();
     store.init_genesis(vec![], 1_700_000_000).unwrap();
 
-    let block = make_block_with_coinbase(1, Bytes32::from([0u8; 32]), helpers::test_hash(0xB1), vec![]);
+    let block = make_block_with_coinbase(
+        1,
+        Bytes32::from([0u8; 32]),
+        helpers::test_hash(0xB1),
+        vec![],
+    );
     let err = store.apply_block(block).unwrap_err();
     match err {
         CoinStoreError::InvalidRewardCoinCount { ref expected, got } => {
@@ -124,7 +134,12 @@ fn vv_req_blk_004_one_coinbase_fails() {
     store.init_genesis(vec![], 1_700_000_000).unwrap();
 
     let coinbase = make_coinbase_coins(1, 1);
-    let block = make_block_with_coinbase(1, Bytes32::from([0u8; 32]), helpers::test_hash(0xB1), coinbase);
+    let block = make_block_with_coinbase(
+        1,
+        Bytes32::from([0u8; 32]),
+        helpers::test_hash(0xB1),
+        coinbase,
+    );
     let err = store.apply_block(block).unwrap_err();
     match err {
         CoinStoreError::InvalidRewardCoinCount { ref expected, got } => {
@@ -151,7 +166,12 @@ fn vv_req_blk_004_three_coinbase_succeeds() {
     store.init_genesis(vec![], 1_700_000_000).unwrap();
 
     let coinbase = make_coinbase_coins(3, 1);
-    let block = make_block_with_coinbase(1, Bytes32::from([0u8; 32]), helpers::test_hash(0xB1), coinbase);
+    let block = make_block_with_coinbase(
+        1,
+        Bytes32::from([0u8; 32]),
+        helpers::test_hash(0xB1),
+        coinbase,
+    );
     let result = store.apply_block(block);
     assert!(
         result.is_ok(),
@@ -172,7 +192,12 @@ fn vv_req_blk_004_five_coinbase_succeeds() {
     store.init_genesis(vec![], 1_700_000_000).unwrap();
 
     let coinbase = make_coinbase_coins(5, 1);
-    let block = make_block_with_coinbase(1, Bytes32::from([0u8; 32]), helpers::test_hash(0xB1), coinbase);
+    let block = make_block_with_coinbase(
+        1,
+        Bytes32::from([0u8; 32]),
+        helpers::test_hash(0xB1),
+        coinbase,
+    );
     let result = store.apply_block(block);
     assert!(
         result.is_ok(),

@@ -27,8 +27,8 @@ fn vv_req_con_001_coin_store_is_sync() {
 #[cfg(feature = "rocksdb-storage")]
 #[test]
 fn vv_req_con_001_arc_shareable() {
-    use std::sync::Arc;
     use dig_coinstore::coin_store::CoinStore;
+    use std::sync::Arc;
 
     let dir = helpers::temp_dir();
     let store = CoinStore::new(dir.path()).unwrap();

@@ -173,8 +173,7 @@ impl CoinStore {
 
         // Write both indices (standalone, not batch).
         self.backend.put(schema::CF_HINTS, &fwd_key, &[])?;
-        self.backend
-            .put(schema::CF_HINTS_BY_VALUE, &rev_key, &[])?;
+        self.backend.put(schema::CF_HINTS_BY_VALUE, &rev_key, &[])?;
 
         Ok(())
     }
@@ -324,8 +323,7 @@ impl CoinStore {
                 rev_key.extend_from_slice(coin_id.as_ref());
 
                 // Delete reverse index entry.
-                self.backend
-                    .delete(schema::CF_HINTS_BY_VALUE, &rev_key)?;
+                self.backend.delete(schema::CF_HINTS_BY_VALUE, &rev_key)?;
 
                 // Delete forward index entry.
                 self.backend.delete(schema::CF_HINTS, fwd_key)?;
@@ -362,9 +360,7 @@ impl CoinStore {
         hint: &[u8],
         max_items: usize,
     ) -> Result<Vec<CoinId>, CoinStoreError> {
-        let entries = self
-            .backend
-            .prefix_scan(schema::CF_HINTS_BY_VALUE, hint)?;
+        let entries = self.backend.prefix_scan(schema::CF_HINTS_BY_VALUE, hint)?;
 
         let expected_key_len = hint.len() + 32;
         let mut result = Vec::with_capacity(entries.len().min(max_items));

@@ -18,9 +18,7 @@
 
 mod helpers;
 
-use dig_coinstore::{
-    coin_store::CoinStore, BlockData, Bytes32, CoinAddition,
-};
+use dig_coinstore::{coin_store::CoinStore, BlockData, Bytes32, CoinAddition};
 
 /// Build a minimal valid block at the given height.
 fn make_block(height: u64, parent_hash: Bytes32, block_hash: Bytes32) -> BlockData {

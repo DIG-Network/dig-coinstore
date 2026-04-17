@@ -71,10 +71,7 @@ impl CoinStore {
     ///
     /// # Requirement: QRY-001
     /// # SPEC.md: §3.4
-    pub fn get_coin_records(
-        &self,
-        coin_ids: &[CoinId],
-    ) -> Result<Vec<CoinRecord>, CoinStoreError> {
+    pub fn get_coin_records(&self, coin_ids: &[CoinId]) -> Result<Vec<CoinRecord>, CoinStoreError> {
         let mut results = Vec::with_capacity(coin_ids.len());
         for coin_id in coin_ids {
             if let Some(rec) = self.get_coin_record(coin_id)? {
@@ -561,7 +558,9 @@ impl CoinStore {
         candidates.sort_by(|a, b| {
             let a_max = std::cmp::max(a.confirmed_height, a.spent_height.unwrap_or(0));
             let b_max = std::cmp::max(b.confirmed_height, b.spent_height.unwrap_or(0));
-            a_max.cmp(&b_max).then_with(|| a.coin_id().cmp(&b.coin_id()))
+            a_max
+                .cmp(&b_max)
+                .then_with(|| a.coin_id().cmp(&b.coin_id()))
         });
 
         // §1.5 #5: Block boundary preservation + pagination detection.
@@ -584,16 +583,17 @@ impl CoinStore {
         let mut end = max_items;
         while end > 0 {
             let rec = &candidates[end - 1];
-            let rec_height =
-                std::cmp::max(rec.confirmed_height, rec.spent_height.unwrap_or(0));
+            let rec_height = std::cmp::max(rec.confirmed_height, rec.spent_height.unwrap_or(0));
             if rec_height < overflow_height {
                 break;
             }
             end -= 1;
         }
 
-        let states: Vec<crate::CoinState> =
-            candidates[..end].iter().map(|r| r.to_coin_state()).collect();
+        let states: Vec<crate::CoinState> = candidates[..end]
+            .iter()
+            .map(|r| r.to_coin_state())
+            .collect();
         Ok((states, Some(overflow_height)))
     }
 

@@ -67,9 +67,7 @@ fn vv_req_hnt_006_short_hint_stored_and_queried() {
     store.add_hint(&coin_id, &short_hint).unwrap();
     assert_eq!(store.count_hints().unwrap(), 1, "Short hint must be stored");
 
-    let results = store
-        .get_coin_ids_by_hint_bytes(&short_hint, 100)
-        .unwrap();
+    let results = store.get_coin_ids_by_hint_bytes(&short_hint, 100).unwrap();
     assert_eq!(results.len(), 1, "Short hint must be found via bytes API");
     assert_eq!(results[0], coin_id);
 }
@@ -98,9 +96,7 @@ fn vv_req_hnt_006_no_prefix_collision() {
     assert_eq!(store.count_hints().unwrap(), 2);
 
     // Query for the 16-byte hint: only coin_a.
-    let short_results = store
-        .get_coin_ids_by_hint_bytes(&short_hint, 100)
-        .unwrap();
+    let short_results = store.get_coin_ids_by_hint_bytes(&short_hint, 100).unwrap();
     assert_eq!(
         short_results.len(),
         1,
@@ -146,9 +142,7 @@ fn vv_req_hnt_006_two_lengths_same_coin() {
     );
 
     // Query each independently.
-    let short_results = store
-        .get_coin_ids_by_hint_bytes(&short_hint, 100)
-        .unwrap();
+    let short_results = store.get_coin_ids_by_hint_bytes(&short_hint, 100).unwrap();
     assert_eq!(short_results.len(), 1);
     assert_eq!(short_results[0], coin_id);
 

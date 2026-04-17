@@ -112,7 +112,10 @@ fn vv_req_api_010_rollback_equal_height_is_noop() {
     let mut store = CoinStore::new(dir.path()).unwrap();
     store.init_genesis(vec![], 1).unwrap();
     let result = store.rollback_to_block(0).unwrap();
-    assert_eq!(result.new_height, 0, "Rolling back to current height is a no-op");
+    assert_eq!(
+        result.new_height, 0,
+        "Rolling back to current height is a no-op"
+    );
     assert_eq!(result.coins_deleted, 0);
     assert_eq!(result.coins_unspent, 0);
 }

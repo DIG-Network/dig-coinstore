@@ -71,7 +71,8 @@ fn vv_req_blk_012_hints_stored_in_forward_index() {
     store.init_genesis(vec![], 1_700_000_000).unwrap();
 
     assert_eq!(
-        store.stats().hint_count, 0,
+        store.stats().hint_count,
+        0,
         "No hints before any block applied"
     );
 
@@ -86,7 +87,8 @@ fn vv_req_blk_012_hints_stored_in_forward_index() {
     store.apply_block(block).unwrap();
 
     assert_eq!(
-        store.stats().hint_count, 1,
+        store.stats().hint_count,
+        1,
         "One hint must be stored in the forward index after apply_block"
     );
 }
@@ -122,7 +124,8 @@ fn vv_req_blk_012_duplicate_hints_idempotent() {
 
     // The key-value store deduplicates identical keys, so hint_count should be 1.
     assert_eq!(
-        store.stats().hint_count, 1,
+        store.stats().hint_count,
+        1,
         "Duplicate (coin_id, hint) should be idempotent — only 1 entry in forward index"
     );
 }
@@ -151,7 +154,8 @@ fn vv_req_blk_012_multiple_hints_same_coin() {
     store.apply_block(block).unwrap();
 
     assert_eq!(
-        store.stats().hint_count, 2,
+        store.stats().hint_count,
+        2,
         "Two distinct hints for the same coin must produce 2 forward-index entries"
     );
 }
@@ -183,10 +187,7 @@ fn vv_req_blk_012_hints_accumulate_across_blocks() {
     b1.hints = vec![(coin_a_id, hint_a)];
     store.apply_block(b1).unwrap();
 
-    assert_eq!(
-        store.stats().hint_count, 1,
-        "One hint after block 1"
-    );
+    assert_eq!(store.stats().hint_count, 1, "One hint after block 1");
 
     // Block 2: add coin B with hint.
     let hash2 = helpers::test_hash(0xB2);
@@ -196,7 +197,8 @@ fn vv_req_blk_012_hints_accumulate_across_blocks() {
     store.apply_block(b2).unwrap();
 
     assert_eq!(
-        store.stats().hint_count, 2,
+        store.stats().hint_count,
+        2,
         "Two hints after block 2 (hints from both blocks must be retained)"
     );
 }

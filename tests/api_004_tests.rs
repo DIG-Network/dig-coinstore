@@ -262,7 +262,7 @@ fn vv_req_api_004_from_rocksdb_error_stringifies() {
 #[cfg(feature = "lmdb-storage")]
 #[test]
 fn vv_req_api_004_from_heed_error_stringifies() {
-    let inner = heed::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "heed test"));
+    let inner = heed::Error::Io(std::io::Error::other("heed test"));
     let outer: CoinStoreError = inner.into();
     match outer {
         CoinStoreError::StorageError(s) => assert!(!s.is_empty(), "{}", s),

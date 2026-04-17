@@ -58,7 +58,8 @@ fn vv_req_sto_008_coin_record_legacy_default_bincode_still_loads() {
     let coin = helpers::test_coin(3, 4, 8);
     let rec = CoinRecord::new(coin, 7, 99, false);
     let legacy = bincode::serialize(&rec).expect("legacy default bincode");
-    let got = kv_bincode::decode_coin_record_storage(&legacy).expect("storage decode must accept legacy");
+    let got =
+        kv_bincode::decode_coin_record_storage(&legacy).expect("storage decode must accept legacy");
     assert_eq!(got, rec);
 }
 
@@ -90,15 +91,7 @@ fn vv_req_sto_008_snapshot_kv_roundtrip() {
 /// `state_snapshots`; lexicographic `cmp` on key bytes must track numeric `height` order (genesis through large tips).
 #[test]
 fn vv_req_sto_008_height_snapshot_keys_sort_like_numeric() {
-    let heights = [
-        0u64,
-        1,
-        255,
-        256,
-        65_535,
-        u32::MAX as u64,
-        u64::MAX,
-    ];
+    let heights = [0u64, 1, 255, 256, 65_535, u32::MAX as u64, u64::MAX];
     let keys: Vec<[u8; 8]> = heights.iter().copied().map(schema::snapshot_key).collect();
     let mut sorted = keys.clone();
     sorted.sort();

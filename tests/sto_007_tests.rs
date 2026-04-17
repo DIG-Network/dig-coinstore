@@ -35,7 +35,10 @@ use std::process::Command;
 /// This does not prove Cargo.toml was never edited incorrectly — it proves the **built test binary** was compiled with
 /// the RocksDB backend feature enabled, which is the contract for “default consumer gets RocksDB”.
 #[test]
+#[allow(clippy::assertions_on_constants)]
 fn vv_req_sto_007_default_features_include_rocksdb() {
+    // Runtime assert on cfg! — this evaluates to a constant at compile time
+    // but fails the test binary if feature gate drift breaks default config.
     assert!(
         cfg!(feature = "rocksdb-storage"),
         "run `cargo test` without `--no-default-features`; default features must include rocksdb-storage"
@@ -126,25 +129,31 @@ mod sto007_full {
     #[test]
     fn vv_req_sto_007_full_storage_opens_each_engine() {
         let rocks_dir = tempfile::tempdir().expect("tempdir rocks");
-        let rocks_cfg = CoinStoreConfig::default_with_path(rocks_dir.path()).with_backend(Engine::RocksDb);
+        let rocks_cfg =
+            CoinStoreConfig::default_with_path(rocks_dir.path()).with_backend(Engine::RocksDb);
         let rocks = open_storage_backend(Engine::RocksDb, &rocks_cfg).expect("rocks");
         rocks
             .put(schema::CF_METADATA, b"which", b"rocks")
             .expect("rocks put");
 
         let lmdb_dir = tempfile::tempdir().expect("tempdir lmdb");
-        let lmdb_cfg = CoinStoreConfig::default_with_path(lmdb_dir.path()).with_backend(Engine::Lmdb);
+        let lmdb_cfg =
+            CoinStoreConfig::default_with_path(lmdb_dir.path()).with_backend(Engine::Lmdb);
         let lmdb = open_storage_backend(Engine::Lmdb, &lmdb_cfg).expect("lmdb");
-        lmdb
-            .put(schema::CF_METADATA, b"which", b"lmdb")
+        lmdb.put(schema::CF_METADATA, b"which", b"lmdb")
             .expect("lmdb put");
 
         assert_eq!(
-            rocks.get(schema::CF_METADATA, b"which").expect("r").as_deref(),
+            rocks
+                .get(schema::CF_METADATA, b"which")
+                .expect("r")
+                .as_deref(),
             Some(b"rocks".as_slice())
         );
         assert_eq!(
-            lmdb.get(schema::CF_METADATA, b"which").expect("l").as_deref(),
+            lmdb.get(schema::CF_METADATA, b"which")
+                .expect("l")
+                .as_deref(),
             Some(b"lmdb".as_slice())
         );
     }

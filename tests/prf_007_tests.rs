@@ -19,9 +19,7 @@
 
 mod helpers;
 
-use dig_coinstore::{
-    coin_store::CoinStore, storage::schema, BlockData, Bytes32, CoinAddition,
-};
+use dig_coinstore::{coin_store::CoinStore, storage::schema, BlockData, Bytes32, CoinAddition};
 
 fn make_block(height: u64, parent_hash: Bytes32, block_hash: Bytes32) -> BlockData {
     let coinbase_coins = if height == 0 {
@@ -60,7 +58,10 @@ fn vv_req_prf_007_big_endian_key_ordering() {
     assert!(k0 < k1, "Height 0 key should sort before height 1");
     assert!(k1 < k255, "Height 1 key should sort before height 255");
     assert!(k255 < k256, "Height 255 key should sort before height 256");
-    assert!(k256 < k65535, "Height 256 key should sort before height 65535");
+    assert!(
+        k256 < k65535,
+        "Height 256 key should sort before height 65535"
+    );
 }
 
 /// **PRF-007:** `get_coins_added_at_height` returns only coins at that height.
@@ -88,7 +89,11 @@ fn vv_req_prf_007_height_query_isolation() {
 
     // Query height 0: should have only genesis coin
     let at_0 = store.get_coins_added_at_height(0).unwrap();
-    assert_eq!(at_0.len(), 1, "Height 0 should have exactly the genesis coin");
+    assert_eq!(
+        at_0.len(),
+        1,
+        "Height 0 should have exactly the genesis coin"
+    );
 
     // Query height 1: should have coin_a + 2 coinbase
     let at_1 = store.get_coins_added_at_height(1).unwrap();

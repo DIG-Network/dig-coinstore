@@ -209,7 +209,13 @@ fn vv_req_api_006_coin_store_apply_block_result_type() {
     let out: Result<ApplyBlockResult, CoinStoreError> = store.apply_block(block);
     let err = out.expect_err("block at height 7 with current height 0 must fail (BLK-002)");
     assert!(
-        matches!(err, CoinStoreError::HeightMismatch { expected: 1, got: 7 }),
+        matches!(
+            err,
+            CoinStoreError::HeightMismatch {
+                expected: 1,
+                got: 7
+            }
+        ),
         "Expected HeightMismatch {{ expected: 1, got: 7 }}, got: {err:?}"
     );
 }
@@ -228,7 +234,10 @@ fn vv_req_api_006_coin_store_rollback_to_block_result_type() {
     // `tests/api_010_tests.rs`.)
     // Rolling back to height 0 when already at height 0 → no-op (RBK-001).
     let out: Result<RollbackResult, CoinStoreError> = store.rollback_to_block(0);
-    assert!(out.is_ok(), "rollback_to_block(0) at height 0 should be a no-op");
+    assert!(
+        out.is_ok(),
+        "rollback_to_block(0) at height 0 should be a no-op"
+    );
     let result = out.unwrap();
     assert_eq!(result.new_height, 0);
     assert_eq!(result.coins_deleted, 0);
@@ -244,7 +253,10 @@ fn vv_req_api_006_coin_store_rollback_n_blocks_result_type() {
 
     // rollback_n_blocks(2) at height 0 → target = -2 → full reset → no-op since already at 0.
     let out: Result<RollbackResult, CoinStoreError> = store.rollback_n_blocks(2);
-    assert!(out.is_ok(), "rollback_n_blocks(2) at height 0 should succeed as no-op");
+    assert!(
+        out.is_ok(),
+        "rollback_n_blocks(2) at height 0 should succeed as no-op"
+    );
     let result = out.unwrap();
     assert_eq!(result.new_height, 0);
 }

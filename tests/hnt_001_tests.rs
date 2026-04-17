@@ -31,7 +31,10 @@ use dig_coinstore::hints::{validate_hint, HintAction, MAX_HINT_LENGTH};
 /// SPEC.md §2.7 defines this as 32 bytes.
 #[test]
 fn vv_req_hnt_001_max_hint_length_constant() {
-    assert_eq!(MAX_HINT_LENGTH, 32, "MAX_HINT_LENGTH must be 32 per SPEC.md §2.7");
+    assert_eq!(
+        MAX_HINT_LENGTH, 32,
+        "MAX_HINT_LENGTH must be 32 per SPEC.md §2.7"
+    );
 }
 
 /// **HNT-001:** Empty hint (0 bytes) returns `HintAction::Skip`.
@@ -42,7 +45,11 @@ fn vv_req_hnt_001_max_hint_length_constant() {
 fn vv_req_hnt_001_empty_hint_skipped() {
     let result = validate_hint(&[]);
     assert!(result.is_ok(), "Empty hint must not error");
-    assert_eq!(result.unwrap(), HintAction::Skip, "Empty hint must return Skip");
+    assert_eq!(
+        result.unwrap(),
+        HintAction::Skip,
+        "Empty hint must return Skip"
+    );
 }
 
 /// **HNT-001:** 33-byte hint returns `HintTooLong { length: 33, max: 32 }`.
