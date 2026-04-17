@@ -17,9 +17,7 @@
 
 mod helpers;
 
-use dig_coinstore::{
-    coin_store::CoinStore, BlockData, Bytes32, CoinStoreConfig,
-};
+use dig_coinstore::{coin_store::CoinStore, BlockData, Bytes32, CoinStoreConfig};
 
 fn make_block(height: u64, parent_hash: Bytes32, block_hash: Bytes32) -> BlockData {
     let coinbase_coins = if height == 0 {
@@ -83,7 +81,11 @@ fn vv_req_prf_008_load_latest_snapshot() {
 
     let latest = store.load_latest_snapshot().unwrap();
     assert!(latest.is_some());
-    assert_eq!(latest.unwrap().height, 1, "Latest snapshot should be at height 1");
+    assert_eq!(
+        latest.unwrap().height,
+        1,
+        "Latest snapshot should be at height 1"
+    );
 }
 
 /// **PRF-008:** load_snapshot for non-saved height returns None.

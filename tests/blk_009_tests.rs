@@ -109,7 +109,8 @@ fn vv_req_blk_009_correct_root_succeeds() {
         result2.err()
     );
     assert_eq!(
-        result2.unwrap().state_root, known_root,
+        result2.unwrap().state_root,
+        known_root,
         "Computed root must match the known correct root"
     );
 }

@@ -20,12 +20,10 @@
 
 mod helpers;
 
+use dig_coinstore::merkle::{merkle_leaf_hash, SparseMerkleTree};
+use dig_coinstore::{coin_store::CoinStore, Bytes32, CoinId, CoinRecord, CoinStoreSnapshot};
 use std::collections::HashMap;
 use std::time::Instant;
-use dig_coinstore::{
-    coin_store::CoinStore, Bytes32, CoinId, CoinRecord, CoinStoreSnapshot,
-};
-use dig_coinstore::merkle::{merkle_leaf_hash, SparseMerkleTree};
 
 /// Same 97-byte legacy layout used by CoinStore for non-ff_eligible rows.
 fn legacy_storage_bytes(rec: &CoinRecord) -> Vec<u8> {
@@ -128,7 +126,10 @@ fn vv_req_prf_001_restore_populates_unspent_set() {
     let dir = helpers::temp_dir();
     let mut store = CoinStore::new(dir.path()).unwrap();
     store.restore(snap).unwrap();
-    assert!(store.is_unspent(&id), "Restored unspent coin must be in set");
+    assert!(
+        store.is_unspent(&id),
+        "Restored unspent coin must be in set"
+    );
 }
 
 /// **PRF-001:** restore() with a spent coin excludes it from the unspent set.
@@ -155,7 +156,10 @@ fn vv_req_prf_001_restore_excludes_spent_coins() {
     let dir = helpers::temp_dir();
     let mut store = CoinStore::new(dir.path()).unwrap();
     store.restore(snap).unwrap();
-    assert!(!store.is_unspent(&id), "Spent coin must not be in unspent set");
+    assert!(
+        !store.is_unspent(&id),
+        "Spent coin must not be in unspent set"
+    );
 }
 
 /// **PRF-001:** O(1) smoke test — many lookups complete in bounded time.
@@ -198,7 +202,10 @@ fn vv_req_prf_001_multiple_genesis_coins() {
     store.init_genesis(coins, 1_700_000_000).unwrap();
 
     for id in &ids {
-        assert!(store.is_unspent(id), "All 20 genesis coins should be unspent");
+        assert!(
+            store.is_unspent(id),
+            "All 20 genesis coins should be unspent"
+        );
     }
 }
 
@@ -218,7 +225,10 @@ fn vv_req_prf_001_apply_block_maintains_unspent_set() {
         .init_genesis(vec![(genesis_coin, false)], 1_700_000_000)
         .unwrap();
 
-    assert!(store.is_unspent(&genesis_id), "Genesis coin must be unspent");
+    assert!(
+        store.is_unspent(&genesis_id),
+        "Genesis coin must be unspent"
+    );
 
     // Apply block 1: add a new coin, spend the genesis coin.
     let new_coin = helpers::test_coin(10, 11, 500);

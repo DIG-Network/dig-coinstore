@@ -17,15 +17,22 @@ use dig_coinstore::{coin_store::CoinStore, Bytes32, CoinAddition};
 
 /// Helper: create store, genesis with one coin, apply block 1 with additions and removals.
 #[cfg(feature = "rocksdb-storage")]
-fn setup_store_with_coins() -> (CoinStore, tempfile::TempDir, chia_protocol::Coin, chia_protocol::Coin) {
+fn setup_store_with_coins() -> (
+    CoinStore,
+    tempfile::TempDir,
+    chia_protocol::Coin,
+    chia_protocol::Coin,
+) {
     let dir = helpers::temp_dir();
     let mut store = CoinStore::new(dir.path()).unwrap();
     let genesis_coin = helpers::test_coin(1, 2, 1_000_000);
-    store.init_genesis(vec![(genesis_coin, false)], 1_700_000_000).unwrap();
+    store
+        .init_genesis(vec![(genesis_coin, false)], 1_700_000_000)
+        .unwrap();
 
     // Block 1: add a new coin and spend the genesis coin
     let new_coin = helpers::test_coin(10, 11, 500);
-    let mut block = dig_coinstore::BlockData {
+    let block = dig_coinstore::BlockData {
         height: 1,
         timestamp: 1_700_000_018,
         block_hash: helpers::test_hash(0xB1),
@@ -76,7 +83,9 @@ fn vv_req_qry_001_get_spent_coin() {
 fn vv_req_qry_001_batch_mixed() {
     let (store, _dir, genesis_coin, new_coin) = setup_store_with_coins();
     let fake_id = helpers::test_coin(99, 99, 99).coin_id();
-    let results = store.get_coin_records(&[genesis_coin.coin_id(), new_coin.coin_id(), fake_id]).unwrap();
+    let results = store
+        .get_coin_records(&[genesis_coin.coin_id(), new_coin.coin_id(), fake_id])
+        .unwrap();
     // 2 found, 1 missing (skipped)
     assert_eq!(results.len(), 2, "Should find 2 of 3 IDs");
 }

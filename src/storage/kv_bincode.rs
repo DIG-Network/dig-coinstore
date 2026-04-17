@@ -72,6 +72,8 @@ pub fn decode_coin_store_snapshot(bytes: &[u8]) -> Result<CoinStoreSnapshot, bin
 
 /// Decode a snapshot from disk: STO-008 first, then legacy default bincode.
 #[inline]
-pub fn decode_coin_store_snapshot_storage(bytes: &[u8]) -> Result<CoinStoreSnapshot, bincode::Error> {
+pub fn decode_coin_store_snapshot_storage(
+    bytes: &[u8],
+) -> Result<CoinStoreSnapshot, bincode::Error> {
     decode_coin_store_snapshot(bytes).or_else(|_| bincode::deserialize(bytes))
 }

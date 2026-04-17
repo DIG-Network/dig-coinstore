@@ -111,7 +111,11 @@ fn vv_req_blk_001_apply_valid_block() {
     block.additions = vec![addition];
 
     let result = store.apply_block(block);
-    assert!(result.is_ok(), "Valid block must succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Valid block must succeed: {:?}",
+        result.err()
+    );
 
     let r = result.unwrap();
     // 2 coinbase + 1 addition = 3 coins created
@@ -341,8 +345,16 @@ fn vv_req_blk_001_atomicity_on_failure() {
     assert!(result.is_err(), "Block with invalid removal must fail");
 
     // Verify no state changes
-    assert_eq!(store.height(), height_before, "Height must not change on failure");
-    assert_eq!(store.tip_hash(), tip_before, "Tip hash must not change on failure");
+    assert_eq!(
+        store.height(),
+        height_before,
+        "Height must not change on failure"
+    );
+    assert_eq!(
+        store.tip_hash(),
+        tip_before,
+        "Tip hash must not change on failure"
+    );
 }
 
 /// **BLK-001:** State root in result matches store's state_root after apply.

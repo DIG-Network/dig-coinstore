@@ -25,29 +25,43 @@ fn setup_chain() -> (CoinStore, tempfile::TempDir, chia_protocol::Coin) {
     let dir = helpers::temp_dir();
     let mut store = CoinStore::new(dir.path()).unwrap();
     let genesis_coin = helpers::test_coin(1, 2, 1_000_000);
-    store.init_genesis(vec![(genesis_coin, false)], 1_700_000_000).unwrap();
+    store
+        .init_genesis(vec![(genesis_coin, false)], 1_700_000_000)
+        .unwrap();
 
     // Block 1: add coin_a, spend genesis_coin
     let coin_a = helpers::test_coin(10, 11, 500);
     let b1 = dig_coinstore::BlockData {
-        height: 1, timestamp: 1_700_000_018,
-        block_hash: helpers::test_hash(0xB1), parent_hash: Bytes32::from([0u8; 32]),
+        height: 1,
+        timestamp: 1_700_000_018,
+        block_hash: helpers::test_hash(0xB1),
+        parent_hash: Bytes32::from([0u8; 32]),
         additions: vec![CoinAddition::from_coin(coin_a, false)],
         removals: vec![genesis_coin.coin_id()],
-        coinbase_coins: vec![helpers::test_coin(200, 201, 1_750_000_000_000), helpers::test_coin(202, 203, 250_000_000_000)],
-        hints: vec![], expected_state_root: None,
+        coinbase_coins: vec![
+            helpers::test_coin(200, 201, 1_750_000_000_000),
+            helpers::test_coin(202, 203, 250_000_000_000),
+        ],
+        hints: vec![],
+        expected_state_root: None,
     };
     store.apply_block(b1).unwrap();
 
     // Block 2: add coin_b
     let coin_b = helpers::test_coin(20, 21, 700);
     let b2 = dig_coinstore::BlockData {
-        height: 2, timestamp: 1_700_000_036,
-        block_hash: helpers::test_hash(0xB2), parent_hash: helpers::test_hash(0xB1),
+        height: 2,
+        timestamp: 1_700_000_036,
+        block_hash: helpers::test_hash(0xB2),
+        parent_hash: helpers::test_hash(0xB1),
         additions: vec![CoinAddition::from_coin(coin_b, false)],
         removals: vec![],
-        coinbase_coins: vec![helpers::test_coin(204, 205, 1_750_000_000_000), helpers::test_coin(206, 207, 250_000_000_000)],
-        hints: vec![], expected_state_root: None,
+        coinbase_coins: vec![
+            helpers::test_coin(204, 205, 1_750_000_000_000),
+            helpers::test_coin(206, 207, 250_000_000_000),
+        ],
+        hints: vec![],
+        expected_state_root: None,
     };
     store.apply_block(b2).unwrap();
 
@@ -95,7 +109,10 @@ fn vv_req_rbk_002_delete_coins_after_target() {
     // Rollback to height 0 — should delete all coins from blocks 1 and 2.
     let result = store.rollback_to_block(0).unwrap();
     assert_eq!(result.new_height, 0);
-    assert!(result.coins_deleted > 0, "Should have deleted block 1+2 coins");
+    assert!(
+        result.coins_deleted > 0,
+        "Should have deleted block 1+2 coins"
+    );
 
     // Genesis coin should be restored (un-spent since block 1 was rolled back).
     let rec = store.get_coin_record(&genesis_coin.coin_id()).unwrap();
@@ -115,7 +132,10 @@ fn vv_req_rbk_003_unspend_coins() {
     let rec = store.get_coin_record(&genesis_coin.coin_id()).unwrap();
     if let Some(r) = rec {
         // If it still exists, it should be unspent.
-        assert!(!r.is_spent(), "Genesis coin should be unspent after rollback to 0");
+        assert!(
+            !r.is_spent(),
+            "Genesis coin should be unspent after rollback to 0"
+        );
     }
 }
 
@@ -141,7 +161,10 @@ fn vv_req_rbk_006_merkle_tree_updated() {
     store.rollback_to_block(1).unwrap();
     let root_after = store.state_root();
 
-    assert_ne!(root_before, root_after, "Merkle root should change after rollback");
+    assert_ne!(
+        root_before, root_after,
+        "Merkle root should change after rollback"
+    );
 }
 
 /// RBK-001: negative target triggers full reset.
@@ -168,7 +191,10 @@ fn vv_req_rbk_002_rollback_to_1() {
 
     // coin_b (from block 2) should be deleted.
     let rec = store.get_coin_record(&coin_b.coin_id()).unwrap();
-    assert!(rec.is_none(), "coin_b from block 2 should be deleted after rollback to 1");
+    assert!(
+        rec.is_none(),
+        "coin_b from block 2 should be deleted after rollback to 1"
+    );
 }
 
 /// RBK-007: Height queries after rollback are consistent.
@@ -181,9 +207,15 @@ fn vv_req_rbk_007_consistency_after_rollback() {
 
     // No coins should be at height 2 anymore.
     let added_h2 = store.get_coins_added_at_height(2).unwrap();
-    assert!(added_h2.is_empty(), "No coins at height 2 after rollback to 1");
+    assert!(
+        added_h2.is_empty(),
+        "No coins at height 2 after rollback to 1"
+    );
 
     // Coins at height 1 should still exist.
     let added_h1 = store.get_coins_added_at_height(1).unwrap();
-    assert!(!added_h1.is_empty(), "Block 1 coins preserved after rollback to 1");
+    assert!(
+        !added_h1.is_empty(),
+        "Block 1 coins preserved after rollback to 1"
+    );
 }

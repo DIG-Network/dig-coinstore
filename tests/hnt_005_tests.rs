@@ -43,11 +43,18 @@ fn vv_req_hnt_005_remove_hints_both_indices_cleaned() {
 
     let removed = store.remove_hints_for_coins(&[coin_id]).unwrap();
     assert_eq!(removed, 1, "Must report 1 pair removed");
-    assert_eq!(store.count_hints().unwrap(), 0, "Forward index must be empty");
+    assert_eq!(
+        store.count_hints().unwrap(),
+        0,
+        "Forward index must be empty"
+    );
 
     // Reverse index must also be empty.
     let reverse = store.get_coin_ids_by_hint(&hint, 100).unwrap();
-    assert!(reverse.is_empty(), "Reverse index must be empty after removal");
+    assert!(
+        reverse.is_empty(),
+        "Reverse index must be empty after removal"
+    );
 }
 
 /// **HNT-005:** After removal, get_coin_ids_by_hint returns empty for that hint.

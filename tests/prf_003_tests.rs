@@ -19,9 +19,7 @@
 
 mod helpers;
 
-use dig_coinstore::{
-    coin_store::CoinStore, BlockData, Bytes32, CoinAddition,
-};
+use dig_coinstore::{coin_store::CoinStore, BlockData, Bytes32, CoinAddition};
 
 fn make_block(height: u64, parent_hash: Bytes32, block_hash: Bytes32) -> BlockData {
     let coinbase_coins = if height == 0 {
@@ -124,7 +122,10 @@ fn vv_req_prf_003_counters_after_spend() {
     let stats = store.stats();
     // Genesis coin now spent, 2 coinbase coins unspent
     assert_eq!(stats.spent_count, 1, "One coin should be spent");
-    assert_eq!(stats.unspent_count, 2, "Two coinbase coins should be unspent");
+    assert_eq!(
+        stats.unspent_count, 2,
+        "Two coinbase coins should be unspent"
+    );
 }
 
 /// **PRF-003:** After rollback, counters revert.
@@ -165,10 +166,7 @@ fn vv_req_prf_003_consistency_stats_vs_queries() {
     let c2 = helpers::test_coin(3, 4, 200);
     let c3 = helpers::test_coin(5, 6, 300);
     store
-        .init_genesis(
-            vec![(c1, false), (c2, false), (c3, false)],
-            1_700_000_000,
-        )
+        .init_genesis(vec![(c1, false), (c2, false), (c3, false)], 1_700_000_000)
         .unwrap();
 
     let stats = store.stats();

@@ -39,7 +39,10 @@ fn vv_req_hnt_003_forward_index_lookup() {
     store.add_hint(&coin_id, hint_b.as_ref()).unwrap();
 
     let map = store.get_hints_for_coin_ids(&[coin_id]).unwrap();
-    assert!(map.contains_key(&coin_id), "Forward index must contain coin_id");
+    assert!(
+        map.contains_key(&coin_id),
+        "Forward index must contain coin_id"
+    );
     let hints = map.get(&coin_id).unwrap();
     assert_eq!(hints.len(), 2, "Two hints must be returned for the coin");
     assert!(hints.contains(&hint_a), "Forward index must contain hint_a");
@@ -66,8 +69,14 @@ fn vv_req_hnt_003_reverse_index_lookup() {
 
     let results = store.get_coin_ids_by_hint(&hint, 100).unwrap();
     assert_eq!(results.len(), 2, "Reverse index must return both coin_ids");
-    assert!(results.contains(&coin_a), "Reverse index must contain coin_a");
-    assert!(results.contains(&coin_b), "Reverse index must contain coin_b");
+    assert!(
+        results.contains(&coin_a),
+        "Reverse index must contain coin_a"
+    );
+    assert!(
+        results.contains(&coin_b),
+        "Reverse index must contain coin_b"
+    );
 }
 
 /// **HNT-003 / Consistency:** Both indices agree after add_hint.

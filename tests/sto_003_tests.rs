@@ -101,7 +101,7 @@ fn vv_req_sto_003_mvcc_read_txn_sees_snapshot_while_writer_updates() {
         .expect("metadata db");
 
     assert_eq!(
-        meta.get(&rtxn, b"mvcc_k").unwrap().as_deref(),
+        meta.get(&rtxn, b"mvcc_k").unwrap(),
         Some(b"v1".as_slice()),
         "baseline read in snapshot"
     );
@@ -109,7 +109,7 @@ fn vv_req_sto_003_mvcc_read_txn_sees_snapshot_while_writer_updates() {
     backend.put(CF_METADATA, b"mvcc_k", b"v2").unwrap();
 
     assert_eq!(
-        meta.get(&rtxn, b"mvcc_k").unwrap().as_deref(),
+        meta.get(&rtxn, b"mvcc_k").unwrap(),
         Some(b"v1".as_slice()),
         "read txn must still see v1 (snapshot) after concurrent logical update"
     );

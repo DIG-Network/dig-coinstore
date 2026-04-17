@@ -24,9 +24,7 @@
 
 mod helpers;
 
-use dig_coinstore::{
-    coin_store::CoinStore, BlockData, Bytes32, CoinAddition,
-};
+use dig_coinstore::{coin_store::CoinStore, BlockData, Bytes32, CoinAddition};
 
 fn make_block(height: u64, parent_hash: Bytes32, block_hash: Bytes32) -> BlockData {
     let coinbase_coins = if height == 0 {

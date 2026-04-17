@@ -7,7 +7,7 @@
 
 mod helpers;
 
-use dig_coinstore::{coin_store::CoinStore, Bytes32, CoinAddition};
+use dig_coinstore::{coin_store::CoinStore, Bytes32};
 
 #[cfg(feature = "rocksdb-storage")]
 fn setup() -> (CoinStore, tempfile::TempDir, Bytes32) {
@@ -17,15 +17,24 @@ fn setup() -> (CoinStore, tempfile::TempDir, Bytes32) {
     let c1 = helpers::test_coin(1, 2, 100);
     let c2 = helpers::test_coin(3, 2, 200);
     let puzzle_hash = helpers::test_hash(2);
-    store.init_genesis(vec![(c1, false), (c2, false)], 1_700_000_000).unwrap();
+    store
+        .init_genesis(vec![(c1, false), (c2, false)], 1_700_000_000)
+        .unwrap();
 
     // Block 1: spend c1
     let block = dig_coinstore::BlockData {
-        height: 1, timestamp: 1_700_000_018,
-        block_hash: helpers::test_hash(0xB1), parent_hash: Bytes32::from([0u8; 32]),
-        additions: vec![], removals: vec![c1.coin_id()],
-        coinbase_coins: vec![helpers::test_coin(200, 201, 1_750_000_000_000), helpers::test_coin(202, 203, 250_000_000_000)],
-        hints: vec![], expected_state_root: None,
+        height: 1,
+        timestamp: 1_700_000_018,
+        block_hash: helpers::test_hash(0xB1),
+        parent_hash: Bytes32::from([0u8; 32]),
+        additions: vec![],
+        removals: vec![c1.coin_id()],
+        coinbase_coins: vec![
+            helpers::test_coin(200, 201, 1_750_000_000_000),
+            helpers::test_coin(202, 203, 250_000_000_000),
+        ],
+        hints: vec![],
+        expected_state_root: None,
     };
     store.apply_block(block).unwrap();
     (store, dir, puzzle_hash)
@@ -36,8 +45,14 @@ fn setup() -> (CoinStore, tempfile::TempDir, Bytes32) {
 #[test]
 fn vv_req_qry_002_include_spent_true() {
     let (store, _dir, ph) = setup();
-    let results = store.get_coin_records_by_puzzle_hash(true, &ph, 0, u64::MAX).unwrap();
-    assert_eq!(results.len(), 2, "Both spent + unspent with include_spent=true");
+    let results = store
+        .get_coin_records_by_puzzle_hash(true, &ph, 0, u64::MAX)
+        .unwrap();
+    assert_eq!(
+        results.len(),
+        2,
+        "Both spent + unspent with include_spent=true"
+    );
 }
 
 /// Only unspent coins returned when include_spent=false.
@@ -45,7 +60,9 @@ fn vv_req_qry_002_include_spent_true() {
 #[test]
 fn vv_req_qry_002_include_spent_false() {
     let (store, _dir, ph) = setup();
-    let results = store.get_coin_records_by_puzzle_hash(false, &ph, 0, u64::MAX).unwrap();
+    let results = store
+        .get_coin_records_by_puzzle_hash(false, &ph, 0, u64::MAX)
+        .unwrap();
     assert_eq!(results.len(), 1, "Only unspent with include_spent=false");
     assert!(!results[0].is_spent());
 }
@@ -56,7 +73,9 @@ fn vv_req_qry_002_include_spent_false() {
 fn vv_req_qry_002_height_range() {
     let (store, _dir, ph) = setup();
     // Both genesis coins confirmed at height 0 — querying height 1..MAX returns none.
-    let results = store.get_coin_records_by_puzzle_hash(true, &ph, 1, u64::MAX).unwrap();
+    let results = store
+        .get_coin_records_by_puzzle_hash(true, &ph, 1, u64::MAX)
+        .unwrap();
     assert_eq!(results.len(), 0, "No coins confirmed at height >= 1");
 }
 
@@ -66,7 +85,9 @@ fn vv_req_qry_002_height_range() {
 fn vv_req_qry_002_no_match() {
     let (store, _dir, _ph) = setup();
     let other = helpers::test_hash(99);
-    let results = store.get_coin_records_by_puzzle_hash(true, &other, 0, u64::MAX).unwrap();
+    let results = store
+        .get_coin_records_by_puzzle_hash(true, &other, 0, u64::MAX)
+        .unwrap();
     assert!(results.is_empty());
 }
 
@@ -76,6 +97,11 @@ fn vv_req_qry_002_no_match() {
 fn vv_req_qry_002_batch() {
     let (store, _dir, ph) = setup();
     let other = helpers::test_hash(201); // coinbase puzzle hash
-    let results = store.get_coin_records_by_puzzle_hashes(true, &[ph, other], 0, u64::MAX).unwrap();
-    assert!(results.len() >= 2, "Should find coins from both puzzle hashes");
+    let results = store
+        .get_coin_records_by_puzzle_hashes(true, &[ph, other], 0, u64::MAX)
+        .unwrap();
+    assert!(
+        results.len() >= 2,
+        "Should find coins from both puzzle hashes"
+    );
 }

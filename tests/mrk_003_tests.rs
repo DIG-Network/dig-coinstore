@@ -304,12 +304,12 @@ mod rocks_mrk003 {
 mod lmdb_mrk003 {
     use super::*;
 
-    use dig_coinstore::config::StorageBackend;
+    use dig_coinstore::config::StorageBackend as BackendKind;
     use dig_coinstore::storage::lmdb::LmdbBackend;
 
     fn open_backend() -> (tempfile::TempDir, LmdbBackend) {
         let dir = tempfile::tempdir().unwrap();
-        let cfg = CoinStoreConfig::default_with_path(dir.path()).with_backend(StorageBackend::Lmdb);
+        let cfg = CoinStoreConfig::default_with_path(dir.path()).with_backend(BackendKind::Lmdb);
         let backend = LmdbBackend::open(&cfg).unwrap();
         (dir, backend)
     }

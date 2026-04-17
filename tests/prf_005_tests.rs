@@ -22,7 +22,8 @@ use dig_coinstore::storage::schema;
 #[test]
 fn vv_req_prf_005_archive_cf_in_schema() {
     assert_eq!(
-        schema::CF_ARCHIVE_COIN_RECORDS, "archive_coin_records",
+        schema::CF_ARCHIVE_COIN_RECORDS,
+        "archive_coin_records",
         "Archive CF name must match schema constant"
     );
 }
@@ -58,6 +59,6 @@ fn vv_req_prf_005_archive_module_exists() {
     // The archive module is declared in lib.rs — this compile-time proof
     // verifies it hasn't been removed or made private.
     let _ = std::any::type_name::<fn()>(); // dummy to keep test non-empty
-    // Module existence proven by: `use dig_coinstore::archive;` would compile
-    // (verified by the `pub mod archive;` declaration in lib.rs).
+                                           // Module existence proven by: `use dig_coinstore::archive;` would compile
+                                           // (verified by the `pub mod archive;` declaration in lib.rs).
 }

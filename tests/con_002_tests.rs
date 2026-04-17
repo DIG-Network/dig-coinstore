@@ -86,9 +86,9 @@ fn vv_req_con_002_write_methods_take_exclusive_ref() {
 #[cfg(feature = "rocksdb-storage")]
 #[test]
 fn vv_req_con_002_rwlock_wrapper_compiles() {
-    use std::sync::Arc;
-    use parking_lot::RwLock;
     use dig_coinstore::coin_store::CoinStore;
+    use parking_lot::RwLock;
+    use std::sync::Arc;
 
     let dir = helpers::temp_dir();
     let mut store = CoinStore::new(dir.path()).unwrap();
@@ -128,9 +128,9 @@ fn vv_req_con_002_rwlock_wrapper_compiles() {
 #[cfg(feature = "rocksdb-storage")]
 #[test]
 fn vv_req_con_002_concurrent_read_guards() {
-    use std::sync::Arc;
-    use parking_lot::RwLock;
     use dig_coinstore::coin_store::CoinStore;
+    use parking_lot::RwLock;
+    use std::sync::Arc;
 
     let dir = helpers::temp_dir();
     let mut store = CoinStore::new(dir.path()).unwrap();

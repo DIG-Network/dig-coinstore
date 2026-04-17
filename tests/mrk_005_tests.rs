@@ -169,7 +169,8 @@ fn vv_req_mrk_005_verify_tampered_leaf() {
 fn vv_req_mrk_005_verify_wrong_root() {
     let mut tree = SparseMerkleTree::new();
     let key = Bytes32::from([0x55u8; 32]);
-    tree.batch_insert(&[(key, merkle_leaf_hash(b"data"))]).unwrap();
+    tree.batch_insert(&[(key, merkle_leaf_hash(b"data"))])
+        .unwrap();
     let _root = tree.root();
     let proof = tree.get_coin_proof(&key).unwrap();
     let wrong = Bytes32::from([0xFFu8; 32]);
@@ -206,7 +207,8 @@ fn vv_req_mrk_005_verify_snapshot_old_root_still_valid() {
 fn vv_req_mrk_005_verify_against_wrong_tree_state() {
     let mut tree = SparseMerkleTree::new();
     let key = Bytes32::from([0x77u8; 32]);
-    tree.batch_insert(&[(key, merkle_leaf_hash(b"only"))]).unwrap();
+    tree.batch_insert(&[(key, merkle_leaf_hash(b"only"))])
+        .unwrap();
     let root_a = tree.root();
     let proof = tree.get_coin_proof(&key).unwrap();
 

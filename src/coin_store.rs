@@ -879,8 +879,7 @@ impl CoinStore {
         // BLK-007: Insert transaction addition coins — ff_eligible from same_as_parent.
         // Chia: coin_store.py:128-129 — `same_as_parent=True` → spent_index = -1 (FF-eligible).
         for addition in &block.additions {
-            let mut rec =
-                CoinRecord::new(addition.coin, block.height, block.timestamp, false);
+            let mut rec = CoinRecord::new(addition.coin, block.height, block.timestamp, false);
             if addition.same_as_parent {
                 rec.ff_eligible = true;
             }
@@ -923,7 +922,7 @@ impl CoinStore {
         // SPEC.md §1.5 #14: idempotent insertion (duplicate (coin_id, hint) is a no-op).
         for (coin_id, hint) in &block.hints {
             // Skip empty hints (all zeros) per BLK-011.
-            if hint.as_ref() == &[0u8; 32] {
+            if hint.as_ref() == [0u8; 32] {
                 continue;
             }
             let mut fwd = Vec::with_capacity(64);
@@ -1106,14 +1105,12 @@ impl CoinStore {
                     batch.delete(schema::CF_COIN_RECORDS, &schema::coin_key(&coin_id));
 
                     // Delete from puzzle hash index.
-                    let ph_key =
-                        schema::puzzle_hash_coin_key(&rec.coin.puzzle_hash, &coin_id);
+                    let ph_key = schema::puzzle_hash_coin_key(&rec.coin.puzzle_hash, &coin_id);
                     batch.delete(schema::CF_COIN_BY_PUZZLE_HASH, &ph_key);
                     batch.delete(schema::CF_UNSPENT_BY_PUZZLE_HASH, &ph_key);
 
                     // Delete from parent index.
-                    let parent_key =
-                        schema::parent_coin_key(&rec.coin.parent_coin_info, &coin_id);
+                    let parent_key = schema::parent_coin_key(&rec.coin.parent_coin_info, &coin_id);
                     batch.delete(schema::CF_COIN_BY_PARENT, &parent_key);
 
                     // Delete from confirmed height index.
@@ -1135,9 +1132,7 @@ impl CoinStore {
         // HNT-005: Remove hints for deleted coins.
         let deleted_ids: Vec<Bytes32> = modified_coins
             .keys()
-            .filter(|id| {
-                modified_coins[*id].confirmed_height > effective_target
-            })
+            .filter(|id| modified_coins[*id].confirmed_height > effective_target)
             .copied()
             .collect();
         for coin_id in &deleted_ids {
@@ -1186,9 +1181,7 @@ impl CoinStore {
                     rec.spent_height = None;
 
                     // RBK-004: Recompute ff_eligible — check if parent exists.
-                    rec.ff_eligible = self
-                        .get_coin_record(&rec.coin.parent_coin_info)?
-                        .is_some();
+                    rec.ff_eligible = self.get_coin_record(&rec.coin.parent_coin_info)?.is_some();
 
                     let record_bytes = Self::serialize_coin_record_storage_bytes(&rec)?;
 
@@ -1200,8 +1193,7 @@ impl CoinStore {
                     );
 
                     // Re-add to unspent puzzle hash index.
-                    let ph_key =
-                        schema::puzzle_hash_coin_key(&rec.coin.puzzle_hash, &coin_id);
+                    let ph_key = schema::puzzle_hash_coin_key(&rec.coin.puzzle_hash, &coin_id);
                     batch.put(schema::CF_UNSPENT_BY_PUZZLE_HASH, &ph_key, &[]);
 
                     // Remove from spent height index.
@@ -1218,36 +1210,30 @@ impl CoinStore {
 
         // RBK-006: Merkle tree batch rebuild.
         if !merkle_removals.is_empty() {
-            self.merkle_tree.batch_remove(&merkle_removals).map_err(|e| {
-                CoinStoreError::StorageError(format!("Merkle remove during rollback: {}", e))
-            })?;
+            self.merkle_tree
+                .batch_remove(&merkle_removals)
+                .map_err(|e| {
+                    CoinStoreError::StorageError(format!("Merkle remove during rollback: {}", e))
+                })?;
         }
         if !merkle_updates.is_empty() {
-            self.merkle_tree.batch_update(&merkle_updates).map_err(|e| {
-                CoinStoreError::StorageError(format!("Merkle update during rollback: {}", e))
-            })?;
+            self.merkle_tree
+                .batch_update(&merkle_updates)
+                .map_err(|e| {
+                    CoinStoreError::StorageError(format!("Merkle update during rollback: {}", e))
+                })?;
         }
 
         // Update chain tip metadata.
         let new_height = effective_target;
-        batch.put(
-            schema::CF_METADATA,
-            META_HEIGHT,
-            &new_height.to_le_bytes(),
-        );
+        batch.put(schema::CF_METADATA, META_HEIGHT, &new_height.to_le_bytes());
 
         // For the tip hash and timestamp, we need to find the block at effective_target.
-        // If rolling back to 0, use zero hash and genesis timestamp.
-        // Otherwise, these would come from block headers — for now use zero/0 as placeholder
-        // since we don't store block headers. The caller should provide tip context.
-        let new_tip_hash = if new_height == 0 {
-            Bytes32::from([0u8; 32])
-        } else {
-            // We don't store block headers, so we can't recover the old tip hash.
-            // Use zero hash — the caller must re-set via the next apply_block.
-            Bytes32::from([0u8; 32])
-        };
-        let new_timestamp = if new_height == 0 { self.timestamp } else { self.timestamp };
+        // We don't persist block headers, so we can't recover the old tip hash during rollback.
+        // Use zero hash for both paths — caller must re-set via the next apply_block.
+        // Timestamp is preserved as-is for both genesis reset and mid-chain rollback.
+        let new_tip_hash = Bytes32::from([0u8; 32]);
+        let new_timestamp = self.timestamp;
 
         batch.put(schema::CF_METADATA, META_TIP_HASH, new_tip_hash.as_ref());
         batch.put(

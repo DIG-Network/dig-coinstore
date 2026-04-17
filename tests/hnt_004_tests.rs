@@ -101,9 +101,7 @@ fn vv_req_hnt_004_get_coin_ids_by_hints_batch_dedup() {
     // coin_b has only hint_y.
     store.add_hint(&coin_b, hint_y.as_ref()).unwrap();
 
-    let results = store
-        .get_coin_ids_by_hints(&[hint_x, hint_y], 100)
-        .unwrap();
+    let results = store.get_coin_ids_by_hints(&[hint_x, hint_y], 100).unwrap();
     assert_eq!(
         results.len(),
         2,
@@ -135,9 +133,7 @@ fn vv_req_hnt_004_get_hints_for_coin_ids_map() {
     store.add_hint(&coin_a, hint_2.as_ref()).unwrap();
     store.add_hint(&coin_b, hint_3.as_ref()).unwrap();
 
-    let map = store
-        .get_hints_for_coin_ids(&[coin_a, coin_b])
-        .unwrap();
+    let map = store.get_hints_for_coin_ids(&[coin_a, coin_b]).unwrap();
 
     assert!(map.contains_key(&coin_a));
     let hints_a = map.get(&coin_a).unwrap();
@@ -194,7 +190,10 @@ fn vv_req_hnt_004_empty_store_queries() {
     let any_coin = Bytes32::from([0xEE; 32]);
 
     assert_eq!(store.count_hints().unwrap(), 0);
-    assert!(store.get_coin_ids_by_hint(&any_hint, 100).unwrap().is_empty());
+    assert!(store
+        .get_coin_ids_by_hint(&any_hint, 100)
+        .unwrap()
+        .is_empty());
     assert!(store
         .get_coin_ids_by_hints(&[any_hint], 100)
         .unwrap()

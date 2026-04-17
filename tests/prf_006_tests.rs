@@ -18,9 +18,7 @@
 
 mod helpers;
 
-use dig_coinstore::{
-    coin_store::CoinStore, BlockData, Bytes32,
-};
+use dig_coinstore::{coin_store::CoinStore, BlockData, Bytes32};
 
 fn make_block(height: u64, parent_hash: Bytes32, block_hash: Bytes32) -> BlockData {
     let coinbase_coins = if height == 0 {
@@ -150,5 +148,8 @@ fn vv_req_prf_006_restore_rebuilds_unspent_set() {
     let mut store2 = CoinStore::new(dir2.path()).unwrap();
     store2.restore(snap).unwrap();
 
-    assert!(store2.is_unspent(&id), "Unspent set must be rebuilt after restore");
+    assert!(
+        store2.is_unspent(&id),
+        "Unspent set must be rebuilt after restore"
+    );
 }

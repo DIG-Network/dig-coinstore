@@ -19,9 +19,7 @@
 
 mod helpers;
 
-use dig_coinstore::{
-    coin_store::CoinStore, BlockData, Bytes32,
-};
+use dig_coinstore::{coin_store::CoinStore, BlockData, Bytes32};
 
 fn make_block(height: u64, parent_hash: Bytes32, block_hash: Bytes32) -> BlockData {
     let coinbase_coins = if height == 0 {
@@ -85,7 +83,10 @@ fn vv_req_prf_002_cache_coherent_after_spend() {
 
     // Read after spend — must reflect spent state
     let after = store.get_coin_record(&id).unwrap().unwrap();
-    assert!(after.is_spent(), "Cache must reflect spent state after apply_block");
+    assert!(
+        after.is_spent(),
+        "Cache must reflect spent state after apply_block"
+    );
     assert_eq!(after.spent_height, Some(1));
 }
 
@@ -113,7 +114,10 @@ fn vv_req_prf_002_cache_coherent_after_rollback() {
     store.rollback_to_block(0).unwrap();
 
     let after_rb = store.get_coin_record(&id).unwrap().unwrap();
-    assert!(!after_rb.is_spent(), "Cache must reflect un-spent state after rollback");
+    assert!(
+        !after_rb.is_spent(),
+        "Cache must reflect un-spent state after rollback"
+    );
 }
 
 /// **PRF-002:** Many reads of the same coin complete quickly (smoke test for caching).
