@@ -31,9 +31,9 @@ chia-protocol = "0.26"
 chia-sha2 = "0.26"
 chia-traits = "0.26"
 
-# -- DIG workspace crates --
-dig-clvm = { path = "../dig-clvm" }
-dig-constants = { path = "../dig-constants" }
+# -- DIG workspace crates (crates.io) --
+dig-clvm = "0.1"
+dig-constants = "0.1"
 
 # -- Storage backends (feature-gated, see [features] below) --
 rocksdb = { version = "0.22", optional = true }

@@ -735,6 +735,8 @@ dependencies = [
 [[package]]
 name = "dig-clvm"
 version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db148fec080c20c91904e3b6d1909ee39de7aa446d131ef2298c6a3f4841b072"
 dependencies = [
  "chia-bls 0.26.0",
  "chia-consensus",
@@ -747,7 +749,7 @@ dependencies = [
  "clvm-traits",
  "clvm-utils",
  "clvmr",
- "dig-constants 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dig-constants",
  "hex",
  "thiserror 2.0.18",
 ]
@@ -762,7 +764,7 @@ dependencies = [
  "chia-sha2 0.26.0",
  "chia-traits 0.26.0",
  "dig-clvm",
- "dig-constants 0.1.0",
+ "dig-constants",
  "heed",
  "hex-literal",
  "lru",
@@ -774,16 +776,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
-]
-
-[[package]]
-name = "dig-constants"
-version = "0.1.0"
-dependencies = [
- "chia-bls 0.26.0",
- "chia-consensus",
- "chia-protocol",
- "hex-literal",
 ]
 
 [[package]]
