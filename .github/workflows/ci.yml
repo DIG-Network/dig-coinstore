@@ -84,4 +84,4 @@ jobs:
       # fails then passes on retry is reported as flaky rather than a silent
       # pass (#489).
       - name: Test + coverage (fail under 80% lines)
-        run: cargo llvm-cov nextest --workspace --all-features --fail-under-lines 80 --retries 2 -- --test-threads=1
+        run: cargo llvm-cov nextest --workspace --all-features --fail-under-lines 80 --retries 2 --test-threads 1
