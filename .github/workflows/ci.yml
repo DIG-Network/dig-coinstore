@@ -73,8 +73,15 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
       # Line coverage gated at >=80% (measured ~91% at authoring). Storage
       # backends (rocksdb/lmdb) use on-disk files, so tests run single-threaded
-      # to avoid cross-test lock contention.
+      # to avoid cross-test lock contention. Run under nextest so a test that
+      # fails then passes on retry is reported as flaky rather than a silent
+      # pass (#489).
       - name: Test + coverage (fail under 80% lines)
-        run: cargo llvm-cov --workspace --all-features --fail-under-lines 80 -- --test-threads=1
+        run: cargo llvm-cov nextest --workspace --all-features --fail-under-lines 80 --retries 2 -- --test-threads=1
