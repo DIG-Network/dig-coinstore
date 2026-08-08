@@ -122,8 +122,14 @@ fn vv_req_str_001_dig_clvm_available() {
 /// (genesis challenge, puzzle hashes, etc.).
 #[test]
 fn vv_req_str_001_dig_constants_available() {
-    // Prove the crate links by referencing a known export.
-    let _ = std::any::type_name::<dig_constants::NetworkConstants>();
+    // Deliberately an assignment, not a `type_name` probe. A probe names one
+    // path and so stays green even when `dig-clvm` drags a SECOND, incompatible
+    // `dig-constants` into the graph — which would silently give
+    // `NetworkConstants` two identities. Crossing the two paths makes that split
+    // a COMPILE error: this builds only while the direct dependency and
+    // dig-clvm's re-export are the very same crate.
+    let via_clvm: &dig_clvm::NetworkConstants = &dig_clvm::DIG_MAINNET;
+    let _: &dig_constants::NetworkConstants = via_clvm;
 }
 
 /// Verifies STR-001: serde derive macros work.
