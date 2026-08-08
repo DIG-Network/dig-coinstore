@@ -1,6 +1,6 @@
 [package]
 name = "dig-coinstore"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 rust-version = "1.75.0"
 description = "DIG L2 global coin state database — persistent UTXO store with Merkle proofs, hint indexing, and rollback support"
@@ -32,8 +32,13 @@ chia-sha2 = "0.26"
 chia-traits = "0.26"
 
 # -- DIG workspace crates (crates.io) --
-dig-clvm = "0.1"
-dig-constants = "0.1"
+# dig-constants is held at 0.9 deliberately: 0.10.0 moves to chia-protocol
+# 0.36.1, which would put two incompatible chia-protocol majors in one graph
+# alongside the 0.26 pin above and split `Bytes32`/`NetworkConstants` into two
+# distinct types. dig-clvm 0.2 requires `dig-constants ^0.9` for the same reason.
+# Advancing past 0.9 is a whole-stack chia 0.26 -> 0.36 migration, not a bump.
+dig-clvm = "0.2"
+dig-constants = "0.9"
 
 # -- Storage backends (feature-gated, see [features] below) --
 rocksdb = { version = "0.22", optional = true }
