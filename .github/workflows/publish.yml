@@ -73,18 +73,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: "dig-mempool v${{ steps.extract_version.outputs.VERSION }}"
+          release_name: "dig-coinstore v${{ steps.extract_version.outputs.VERSION }}"
           body: |
-            ## dig-mempool v${{ steps.extract_version.outputs.VERSION }}
+            ## dig-coinstore v${{ steps.extract_version.outputs.VERSION }}
 
-            DIG L2 mempool — fee-prioritized, conflict-aware transaction pool with CPFP support.
+            DIG L2 global coin state database: the authoritative persistent store of all spent
+            and unspent coins under the coinset (UTXO-like) model. Accepts pre-validated blocks,
+            applies state transitions, and answers coin lookups by id, puzzle hash, hint, parent
+            and height, with Merkle proofs and rollback support. Runs no CLVM, produces no
+            blocks, manages no mempool.
 
             ### Installation
             ```toml
             [dependencies]
-            dig-mempool = "${{ steps.extract_version.outputs.VERSION }}"
+            dig-coinstore = "${{ steps.extract_version.outputs.VERSION }}"
             ```
 
-            See the [README](https://github.com/DIG-Network/dig-mempool/blob/main/README.md) for usage instructions.
+            See the [README](https://github.com/DIG-Network/dig-coinstore/blob/main/README.md) for usage instructions.
           draft: false
           prerelease: false
